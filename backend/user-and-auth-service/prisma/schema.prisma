@@ -17,6 +17,8 @@ model User{
   username String 
   password String
   profilePicture String?
-  friends String[] 
-
+  university String?
+  academicYear Int?
+  phoneNumber String?
+  friends String[]
 }
