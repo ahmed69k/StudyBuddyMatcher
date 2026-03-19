@@ -28,10 +28,10 @@ const resolvers ={
 
     },
     Mutation: {
-        createUser: async(_,{input})=>{
-            const {email,password,username,profilePicture} = input;
+        register: async(_,{input})=>{
+            const {email,password,username,profilePicture, university, academicYear, phoneNumber} = input;
             const hashPass =(await bcrypt.hash(password,10));
-            const data = {email, password: hashPass, username, profilePicture: profilePicture ?? ""}
+            const data = {email, password: hashPass, username, profilePicture: profilePicture ?? "", university, academicYear, phoneNumber: phoneNumber ?? ""}
             return await prisma.user.create({
                 data
             })

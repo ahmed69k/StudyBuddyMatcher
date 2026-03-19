@@ -6,8 +6,11 @@ const typeDefs = gql`
         email:String!
         password:String!
         username:String!
-        friends:[ID]!
         profilePicture:String
+        university:String
+        academicYear:Int
+        phoneNumber:String
+        friends:[ID]!
     }
     type Query{
         getAllUsers:[User!]!
@@ -27,6 +30,9 @@ const typeDefs = gql`
         password: String!
         username: String!
         profilePicture:String
+        university:String
+        academicYear:Int
+        phoneNumber:String
     }
     input loginUserInput{
         email:String!
@@ -37,15 +43,24 @@ const typeDefs = gql`
         old:String
         new:String
     }
+    type UpdatePayloadInt{
+        message:String
+        old:Int
+        new:Int
+    }
 
     type Mutation{
-        createUser(input: createUserInput!):User!
+        register(input: createUserInput!):User!
         login(input: loginUserInput!):AuthPayload
         deleteProfile(email:String!):DeletePayload!
         updateUsername(username:String!):UpdatePayload!
         updateEmail(email:String!):UpdatePayload!
         updatePassword(password:String!):String!
         updateProfilePicture(profilePicture:String!):UpdatePayload!
+        updateUniversity(university:String!):UpdatePayload!
+        updateAcademicYear(academicYear:Int!):UpdatePayloadInt!
+        updatePhoneNumber(phoneNumber:String!):UpdatePayload!
+
     }
 `
 export default typeDefs
