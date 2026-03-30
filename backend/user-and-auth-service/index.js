@@ -20,11 +20,13 @@ const { url } = await startStandaloneServer(server,{
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "").trim();
     let user = null;
-    try{
-        user = jwt.verify(token, process.env.SECRET_KEY);
-    }
-    catch(err){
-        throw new Error("Unable to verify.")
+    if(token){
+        try{
+            user = jwt.verify(token, process.env.SECRET_KEY);
+        }
+        catch(err){
+            throw new Error("Unable to verify.")
+        }
     }
     return {user}
 }
