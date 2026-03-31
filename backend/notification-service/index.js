@@ -6,15 +6,19 @@ import {PrismaClient} from "@prisma/client"
 import jwt from "jsonwebtoken"
 import {PrismaPg} from "@prisma/adapter-pg"
 import "dotenv/config";
-const adapter = new PrismaPg({connectionString: process.env.DATABASE_URL})
+import { startConsumer } from "./kafka/consumer.js";
 
+const adapter = new PrismaPg({connectionString: process.env.DATABASE_URL})
 export const prisma = new PrismaClient({adapter});
 const server = new ApolloServer({
     typeDefs, 
     resolvers,
 
 });
-const { url } = await startStandaloneServer(server,{
+
+async function startServer(){
+    await startConsumer();
+    const { url } = await startStandaloneServer(server,{
     listen: {port: 4000},
     context: ({req})=>{
     const authHeader = req.headers.authorization || "";
@@ -32,3 +36,5 @@ const { url } = await startStandaloneServer(server,{
 }
 })
 console.log(`Server is ready at ${url}`)
+}
+startServer();

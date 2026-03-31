@@ -1,4 +1,12 @@
 import { prisma } from "../index.js"
+
+export async function sendMail(recipient, subject, message){
+    const data = {recipient,subject,message}
+    const notifications = await prisma.notification.create({
+        data
+    })
+    return notifications
+}
 const resolvers = {
     Query:{
         getMyNotifications: async(_,__,context)=>{
@@ -20,9 +28,7 @@ const resolvers = {
         sendNotification: async(_,{input})=>{
             const {recipient,subject,message} = input
             const data = {recipient,subject,message}
-            const notification = await prisma.notification.create({
-                data
-            })
+            const notification = await sendMail(recipient, subject, message);
             return `Notification sent to user with ID: ${recipient}`
         }
     }
