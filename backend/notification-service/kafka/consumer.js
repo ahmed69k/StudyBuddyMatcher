@@ -3,7 +3,7 @@ import { sendMail } from "../schema/resolvers.js";
 
 const kafka = new Kafka({
     clientId: "notification-service",
-    brokers: ['localhost:9092']
+    brokers: ["localhost:29092"]
 })
 
 const consumer = kafka.consumer({groupId: "notification-group"})

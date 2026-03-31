@@ -6,7 +6,7 @@ const typeDefs = gql`
         recipient:String!
         subject:String!
         message:String!
-        sendDate:String!
+        date:String!
     }
     input sendPayload{
         recipient:String!

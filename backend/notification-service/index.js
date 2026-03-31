@@ -2,7 +2,8 @@ import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone"
 import typeDefs from "./schema/type-defs.js";
 import resolvers from "./schema/resolvers.js";
-import {PrismaClient} from "@prisma/client"
+import pkg from "@prisma/client"
+const {PrismaClient} = pkg
 import jwt from "jsonwebtoken"
 import {PrismaPg} from "@prisma/adapter-pg"
 import "dotenv/config";
@@ -16,25 +17,25 @@ const server = new ApolloServer({
 
 });
 
-async function startServer(){
-    await startConsumer();
-    const { url } = await startStandaloneServer(server,{
-    listen: {port: 4000},
-    context: ({req})=>{
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    let user = null;
-    if(token){
-        try{
-            user = jwt.verify(token, process.env.SECRET_KEY);
-        }
-        catch(err){
-            throw new Error("Unable to verify.")
-        }
-    }
-    return {user}
+await startConsumer()
+const { url } = await startStandaloneServer(server,{
+listen: {port: 4000},
+context: ({ req }) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "").trim();
+
+  if (!token) {
+    return { user: null }; 
+  }
+
+  try {
+    const user = jwt.verify(token, process.env.SECRET_KEY);
+    return { user };
+  } catch (err) {
+    console.warn("Invalid token:", err.message);
+    return { user: null }; 
+  }
 }
 })
 console.log(`Server is ready at ${url}`)
-}
-startServer();
+
