@@ -4,10 +4,10 @@ import { publishEvent } from '../kafka.js';
 export const resolvers = {
   Query: {
     getProfile: async (_, __, context) => {
-      if (!context.userId) throw new Error('Unauthorized');
+      if (!context.user) throw new Error('Unauthorized');
 
       return await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
         include: {
           courses: true,
           topics: true,
@@ -19,14 +19,14 @@ export const resolvers = {
 
   Mutation: {
     addCourse: async (_, { name }, context) => {
-      if (!context.userId) throw new Error('Unauthorized');
+      if (!context.user) throw new Error('Unauthorized');
 
       let profile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
       });
       if (!profile) {
         profile = await prisma.profile.create({
-          data: { userId: context.userId },
+          data: { userId: context.user.id},
         });
       }
 
@@ -35,12 +35,12 @@ export const resolvers = {
       });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id},
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId: context.userId,
+        userId: context.user.id,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -50,7 +50,7 @@ export const resolvers = {
     },
 
     deleteCourse: async (_, { courseId }, context) => {
-      if (!context.userId) throw new Error('Unauthorized');
+      if (!context.user) throw new Error('Unauthorized');
 
       const course = await prisma.course.findUnique({
         where: { id: courseId },
@@ -60,17 +60,17 @@ export const resolvers = {
       const profile = await prisma.profile.findUnique({
         where: { id: course.profileId },
       });
-      if (profile.userId !== context.userId) throw new Error('Unauthorized');
+      if (profile.userId !== context.user.id) throw new Error('Unauthorized');
 
       await prisma.course.delete({ where: { id: courseId } });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId: context.userId,
+        userId: context.user.id,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -80,14 +80,14 @@ export const resolvers = {
     },
 
     addTopic: async (_, { name }, context) => {
-      if (!context.userId) throw new Error('Unauthorized');
+      if (!context.user) throw new Error('Unauthorized');
 
       let profile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
       });
       if (!profile) {
         profile = await prisma.profile.create({
-          data: { userId: context.userId },
+          data: { userId: context.user.id},
         });
       }
 
@@ -96,12 +96,12 @@ export const resolvers = {
       });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId: context.userId,
+        userId: context.user.id,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -111,7 +111,7 @@ export const resolvers = {
     },
 
     deleteTopic: async (_, { topicId }, context) => {
-      if (!context.userId) throw new Error('Unauthorized');
+      if (!context.user) throw new Error('Unauthorized');
 
       const topic = await prisma.topic.findUnique({
         where: { id: topicId },
@@ -121,17 +121,17 @@ export const resolvers = {
       const profile = await prisma.profile.findUnique({
         where: { id: topic.profileId },
       });
-      if (profile.userId !== context.userId) throw new Error('Unauthorized');
+      if (profile.userId !== context.user.id) throw new Error('Unauthorized');
 
       await prisma.topic.delete({ where: { id: topicId } });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId: context.userId,
+        userId: context.user.id,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -141,14 +141,14 @@ export const resolvers = {
     },
 
     upsertStudyPreference: async (_, { pace, mode, groupSize, studyStyle }, context) => {
-      if (!context.userId) throw new Error('Unauthorized');
+      if (!context.user) throw new Error('Unauthorized');
 
       let profile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
       });
       if (!profile) {
         profile = await prisma.profile.create({
-          data: { userId: context.userId },
+          data: { userId: context.user.id },
         });
       }
 
@@ -159,12 +159,12 @@ export const resolvers = {
       });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId: context.userId },
+        where: { userId: context.user.id },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId: context.userId,
+        userId: context.user.id,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
