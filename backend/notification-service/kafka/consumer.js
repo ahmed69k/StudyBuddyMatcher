@@ -1,5 +1,5 @@
 import { Kafka } from "kafkajs";
-import { sendMail } from "../schema/resolvers.js";
+import { sendNotif } from "../schema/resolvers.js";
 
 const kafka = new Kafka({
     clientId: "notification-service",
@@ -14,7 +14,7 @@ export async function startConsumer(){
     await consumer.run({
         eachMessage: async({message})=>{
             const data = JSON.parse(message.value.toString());
-            await sendMail(data.recipient, data.subject, data.message);
+            await sendNotif(data.recipient, data.subject, data.message);
         }
     })
     console.log("Kafka Notification Consumer Is Running...")

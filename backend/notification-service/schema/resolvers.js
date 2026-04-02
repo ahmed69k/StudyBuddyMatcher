@@ -1,6 +1,6 @@
 import { prisma } from "../index.js"
 
-export async function sendMail(recipient, subject, message){
+export async function sendNotif(recipient, subject, message){
     const data = {recipient,subject,message}
     const notifications = await prisma.notification.create({
         data
@@ -28,7 +28,7 @@ const resolvers = {
         sendNotification: async(_,{input})=>{
             const {recipient,subject,message} = input
             const data = {recipient,subject,message}
-            const notification = await sendMail(recipient, subject, message);
+            const notification = await sendNotif(recipient, subject, message);
             return `Notification sent to user with ID: ${recipient}`
         }
     }
