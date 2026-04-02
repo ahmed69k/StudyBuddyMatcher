@@ -1,7 +1,25 @@
 import { prisma } from "../index.js"
 const resolvers = {
     Query:{
-        
+        getUserConversations: async(_,__,context)=>{
+            if(!context.user) throw new Error("Unauthenticated. Please log in to use messages.")
+            const ctxUser = context.user;
+            const conversations = await prisma.conversation.findMany({
+                where:{
+                    users:{
+                        has:ctxUser.id
+                    }
+                },
+                include:{
+                    messages:{
+                        orderBy:{
+                            sendDate: 'desc'
+                        }
+                    }
+                }
+            })
+            return conversations;
+        }
     },
     Mutation:{
         createConversation: async(_,{input},context)=>{
