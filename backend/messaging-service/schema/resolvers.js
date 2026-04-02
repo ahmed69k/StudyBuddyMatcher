@@ -22,6 +22,31 @@ const resolvers = {
                 }
             })
             return newConversation
+        },
+        sendMessage: async(_,{input},context)=>{
+            if(!context.user) throw new Error("Unauthenticated. Please log in to use messages.")
+            const ctxUser = context.user
+            const {conversationId, message} = input
+            const foundConvo = await prisma.conversation.findFirst({
+                where:{
+                    users:{
+                        has: ctxUser.id
+                    },
+                    id: conversationId
+                }
+            })
+            if(!foundConvo) throw new Error("Conversation not found.")
+            const newMessage = await prisma.message.create({
+                data:{
+                    senderId: ctxUser.id,
+                    conversationId: conversationId,
+                    message: message
+                }
+            })
+            return {
+                response: "Success!",
+                message: newMessage
+            };
         }
     }
 }
