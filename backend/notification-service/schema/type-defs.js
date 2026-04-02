@@ -1,7 +1,8 @@
 import gql from "graphql-tag";
 
+//NEED TO ALLOW USERS TO READ NOTIFICATIONS (read status) !!!! REMINDER
 const typeDefs = gql`
-    type Notification{
+    type Notification{ 
         id:ID!
         recipient:String!
         subject:String!
