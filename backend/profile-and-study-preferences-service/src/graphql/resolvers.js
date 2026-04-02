@@ -3,9 +3,11 @@ import { publishEvent } from '../kafka.js';
 
 export const resolvers = {
   Query: {
-    getProfile: async (_, { userId }) => {
+    getProfile: async (_, __, context) => {
+      if (!context.userId) throw new Error('Unauthorized');
+
       return await prisma.profile.findUnique({
-        where: { userId },
+        where: { userId: context.userId },
         include: {
           courses: true,
           topics: true,
@@ -15,18 +17,17 @@ export const resolvers = {
     },
   },
 
-  
-
-
-
   Mutation: {
-    addCourse: async (_, { userId, name }, context) => {
+    addCourse: async (_, { name }, context) => {
       if (!context.userId) throw new Error('Unauthorized');
-      if (context.userId !== userId) throw new Error('Unauthorized');
 
-      let profile = await prisma.profile.findUnique({ where: { userId } });
+      let profile = await prisma.profile.findUnique({
+        where: { userId: context.userId },
+      });
       if (!profile) {
-        profile = await prisma.profile.create({ data: { userId } });
+        profile = await prisma.profile.create({
+          data: { userId: context.userId },
+        });
       }
 
       const course = await prisma.course.create({
@@ -34,12 +35,12 @@ export const resolvers = {
       });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId },
+        where: { userId: context.userId },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId,
+        userId: context.userId,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -51,10 +52,14 @@ export const resolvers = {
     deleteCourse: async (_, { courseId }, context) => {
       if (!context.userId) throw new Error('Unauthorized');
 
-      const course = await prisma.course.findUnique({ where: { id: courseId } });
+      const course = await prisma.course.findUnique({
+        where: { id: courseId },
+      });
       if (!course) throw new Error('Course not found');
 
-      const profile = await prisma.profile.findUnique({ where: { id: course.profileId } });
+      const profile = await prisma.profile.findUnique({
+        where: { id: course.profileId },
+      });
       if (profile.userId !== context.userId) throw new Error('Unauthorized');
 
       await prisma.course.delete({ where: { id: courseId } });
@@ -74,13 +79,16 @@ export const resolvers = {
       return course;
     },
 
-    addTopic: async (_, { userId, name }, context) => {
+    addTopic: async (_, { name }, context) => {
       if (!context.userId) throw new Error('Unauthorized');
-      if (context.userId !== userId) throw new Error('Unauthorized');
 
-      let profile = await prisma.profile.findUnique({ where: { userId } });
+      let profile = await prisma.profile.findUnique({
+        where: { userId: context.userId },
+      });
       if (!profile) {
-        profile = await prisma.profile.create({ data: { userId } });
+        profile = await prisma.profile.create({
+          data: { userId: context.userId },
+        });
       }
 
       const topic = await prisma.topic.create({
@@ -88,12 +96,12 @@ export const resolvers = {
       });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId },
+        where: { userId: context.userId },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId,
+        userId: context.userId,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -105,10 +113,14 @@ export const resolvers = {
     deleteTopic: async (_, { topicId }, context) => {
       if (!context.userId) throw new Error('Unauthorized');
 
-      const topic = await prisma.topic.findUnique({ where: { id: topicId } });
+      const topic = await prisma.topic.findUnique({
+        where: { id: topicId },
+      });
       if (!topic) throw new Error('Topic not found');
 
-      const profile = await prisma.profile.findUnique({ where: { id: topic.profileId } });
+      const profile = await prisma.profile.findUnique({
+        where: { id: topic.profileId },
+      });
       if (profile.userId !== context.userId) throw new Error('Unauthorized');
 
       await prisma.topic.delete({ where: { id: topicId } });
@@ -128,13 +140,16 @@ export const resolvers = {
       return topic;
     },
 
-    upsertStudyPreference: async (_, { userId, pace, mode, groupSize, studyStyle }, context) => {
+    upsertStudyPreference: async (_, { pace, mode, groupSize, studyStyle }, context) => {
       if (!context.userId) throw new Error('Unauthorized');
-      if (context.userId !== userId) throw new Error('Unauthorized');
 
-      let profile = await prisma.profile.findUnique({ where: { userId } });
+      let profile = await prisma.profile.findUnique({
+        where: { userId: context.userId },
+      });
       if (!profile) {
-        profile = await prisma.profile.create({ data: { userId } });
+        profile = await prisma.profile.create({
+          data: { userId: context.userId },
+        });
       }
 
       const studyPreference = await prisma.studyPreference.upsert({
@@ -144,12 +159,12 @@ export const resolvers = {
       });
 
       const fullProfile = await prisma.profile.findUnique({
-        where: { userId },
+        where: { userId: context.userId },
         include: { courses: true, topics: true, studyPreference: true },
       });
 
       await publishEvent('UserPreferencesUpdated', {
-        userId,
+        userId: context.userId,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,

@@ -32,16 +32,15 @@ export const typeDefs = gql`
   }
 
   type Query {
-    getProfile(userId: String!): Profile
+    getProfile: Profile
   }
 
   type Mutation {
-    addCourse(userId: String!, name: String!): Course
+    addCourse(name: String!): Course
     deleteCourse(courseId: String!): Course
-    addTopic(userId: String!, name: String!): Topic
+    addTopic(name: String!): Topic
     deleteTopic(topicId: String!): Topic
     upsertStudyPreference(
-      userId: String!
       pace: String!
       mode: String!
       groupSize: Int!
