@@ -6,7 +6,6 @@ import { connectProducer } from './src/kafka.js';
 import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 
-await connectProducer();
 
 const server = new ApolloServer({
   typeDefs,
