@@ -32,7 +32,7 @@ export const publishEvent = async (eventName, payload) => {
   };
 
   await producer.send({
-    topic: 'user-preferences-updated',
+    topic: 'notifications',
     messages: [{ value: JSON.stringify(message) }],
   });
 
