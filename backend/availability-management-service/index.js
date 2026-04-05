@@ -5,7 +5,7 @@ import resolvers from "./schema/resolvers.js";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { PrismaPg } from "@prisma/adapter-pg";
-// import { connectProducer } from "./kafka/producer.js"; //disable for now
+import { connectProducer } from "./kafka/producer.js";
 import "dotenv/config";
 
 // Prisma + NeonDB
@@ -26,7 +26,7 @@ const server = new ApolloServer({
 const startServer = async () => {
   try {
     // Connect Kafka first
-    // await connectProducer(); //disable for now
+    await connectProducer(); 
 
     const { url } = await startStandaloneServer(server, {
       listen: { port: process.env.PORT || 4000 },
@@ -35,18 +35,27 @@ const startServer = async () => {
         const authHeader = req.headers.authorization || "";
         const token = authHeader.replace("Bearer ", "").trim();
 
-        let user = null;
-
-        if (token) {
-          try {
-            user = jwt.verify(token, process.env.SECRET_KEY);
-          } catch (err) {
-            // throw new Error("Unable to verify token");
-            // user = null; // DO NOT throw
-          }
+        if (!token) {
+          return { user: null }; 
         }
 
-        return { user };
+        // if (token) {
+        //   try {
+        //     user = jwt.verify(token, process.env.SECRET_KEY);
+        //   } catch (err) {
+        //     // throw new Error("Unable to verify token");
+        //     // user = null; // DO NOT throw
+        //   }
+        // }
+
+        // return { user };
+        try {
+          const user = jwt.verify(token, process.env.SECRET_KEY);
+          return { user };
+        } catch (err) {
+          console.warn("Invalid token:", err.message);
+          return { user: null };
+        }
       },
 
     // // for testing

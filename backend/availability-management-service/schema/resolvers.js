@@ -1,5 +1,5 @@
 import { prisma } from "../index.js";
-// import { publishEvent } from "../kafka/producer.js";
+import { publishEvent } from "../kafka/producer.js";
 
 const VALID_DAYS = [
   "Sunday",
@@ -89,7 +89,7 @@ const resolvers = {
         });
 
         // Publish Kafka event
-        // await publishEvent("AvailabilityCreated", created);
+        await publishEvent("AvailabilityCreated", created);
 
         createdSlots.push(created);
       }
@@ -149,7 +149,7 @@ const resolvers = {
       });
 
       // Kafka event
-      // await publishEvent("AvailabilityUpdated", updated);
+      await publishEvent("AvailabilityUpdated", updated);
 
       return updated;
     },
@@ -173,10 +173,10 @@ const resolvers = {
       });
 
       // Kafka event
-      // await publishEvent("AvailabilityDeleted", {
-      //   id,
-      //   userId: context.user.id
-      // });
+      await publishEvent("AvailabilityDeleted", {
+        id,
+        userId: context.user.id
+      });
 
       return {
         message: "Availability deleted successfully",

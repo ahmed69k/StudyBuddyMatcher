@@ -1,59 +1,40 @@
-import { Kafka } from "kafkajs";
-import "dotenv/config";
+import { Kafka } from 'kafkajs';
+import { randomUUID } from 'crypto';
+import 'dotenv/config';
 
-// 🧠 Create Kafka instance
 const kafka = new Kafka({
-  clientId: "availability-service",
-  brokers: [process.env.KAFKA_BROKER],
+  clientId: 'availability-management-service',
+  // Uses 29092 for local testing outside of Docker
+  brokers: [process.env.KAFKA_BROKER || 'localhost:29092'],
 });
 
-// 📣 Create producer
 const producer = kafka.producer();
 
-let isConnected = false;
-
-// 🔌 Connect producer (only once)
 export const connectProducer = async () => {
-  if (isConnected) return;
-
   try {
     await producer.connect();
-    isConnected = true;
-    console.log("✅ Kafka Producer Connected");
+    console.log('✅ Kafka Producer connected');
   } catch (error) {
-    console.error("❌ Kafka Connection Error:", error);
+    console.error('❌ Kafka connection error:', error);
   }
 };
 
-// // 📤 Publish event
-// export const publishEvent = async (eventType, payload) => {
-//   try {
-//     if (!isConnected) {
-//       await connectProducer();
-//     }
+export const publishEvent = async (eventName, payload) => {
+  const message = {
+    event: eventName,
+    timestamp: new Date().toISOString(),
+    producerService: 'availability-management-service',
+    correlationId: randomUUID(),
+    payload,
+  };
 
-//     await producer.send({
-//       topic: "availability-events",
-//       messages: [
-//         {
-//           key: eventType,
-//           value: JSON.stringify({
-//             event: eventType,
-//             timestamp: new Date().toISOString(),
-//             service: "availability-service",
-//             data: payload,
-//           }),
-//         },
-//       ],
-//     });
-
-//     console.log(`📣 Event sent: ${eventType}`);
-//   } catch (error) {
-//     console.error("❌ Failed to send event:", error);
-//   }
-// };
-
-export const publishEvent = async () => {
-  console.log("Kafka skipped");
+  try {
+    await producer.send({
+      topic: 'availability-updates',
+      messages: [{ value: JSON.stringify(message) }],
+    });
+    console.log(`📡 Event published: ${eventName}`);
+  } catch (error) {
+    console.error('❌ Kafka publish error:', error);
+  }
 };
-
