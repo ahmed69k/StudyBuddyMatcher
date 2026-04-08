@@ -8,6 +8,7 @@ const typeDefs = gql`
         subject:String!
         message:String!
         date:String!
+        readStatus:Boolean!
     }
     input sendPayload{
         recipient:String!
@@ -16,9 +17,11 @@ const typeDefs = gql`
     }
     type Mutation{
         sendNotification(input:sendPayload!):String!
+        openNotification(notificationID:ID!):Notification!
     }
     type Query{
         getMyNotifications:[Notification]!
+        
     }
 `
 export default typeDefs
