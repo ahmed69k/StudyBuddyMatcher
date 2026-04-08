@@ -16,4 +16,5 @@ model Notification{
   subject String
   message String
   date DateTime @default(now())
+  readStatus Boolean @default(false)
 } 
