@@ -14,8 +14,28 @@ export async function startConsumer(){
     await consumer.subscribe({topic: "notifications", fromBeginning: true})
     await consumer.run({
         eachMessage: async({message})=>{
-            const data = JSON.parse(message.value.toString());
-            await sendNotif(data.recipient, data.subject, data.message);
+            const raw = message.value?.toString()
+            if(!raw) return;
+            const event = JSON.parse(raw);
+            const {
+                eventName,
+                timestamp,
+                producerService,
+                correlationId,
+                payload
+            } = event;
+            //where does the other info go brawg 😭🙏🏻
+            console.log("Received event:", {
+                eventName,
+                timestamp,
+                producerService,
+                correlationId
+            });
+            if(!payload){
+                console.warn("Missing payload, skipping message.")
+                return;
+            }
+            await sendNotif(payload.recipient, payload.subject, payload.message);
         }
     })
     console.log("Kafka Notification Consumer Is Running...")
