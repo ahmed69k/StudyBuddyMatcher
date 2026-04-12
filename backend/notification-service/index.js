@@ -19,7 +19,7 @@ const server = new ApolloServer({
 
 await startConsumer()
 const { url } = await startStandaloneServer(server,{
-listen: {port: 4000},
+listen: {port: 4000, host: "0.0.0.0"},
 context: ({ req }) => {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.replace("Bearer ", "").trim();
@@ -37,5 +37,5 @@ context: ({ req }) => {
   }
 }
 })
-console.log(`Server is ready at ${url}`)
+console.log(`Notification Service is ready at ${url}`)
 

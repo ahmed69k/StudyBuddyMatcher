@@ -16,9 +16,25 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
   
+  user-and-auth-service:
+    build: ./user-and-auth-service
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./user-and-auth-service/.env
   notification-service:
     depends_on:
       - kafka
     build: ./notification-service/
+    ports:
+      - "4000:4000"
     env_file:
       - ./notification-service/.env
+  messaging-service:
+    build: ./messaging-service
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    env_file:
+      - ./messaging-service/.env
+  
