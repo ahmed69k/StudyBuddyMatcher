@@ -13,6 +13,7 @@ const resolvers ={
             return await prisma.user.findMany();
         },
         getUser:async(_,{email})=>{
+            if(!isValidEmail(email)) throw new Error("Needs to be a valid email.")
             return await prisma.user.findUnique({where: {email}})
         },
         me: async(_,__,context)=>{

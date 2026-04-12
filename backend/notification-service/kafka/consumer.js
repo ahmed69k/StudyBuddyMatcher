@@ -3,14 +3,15 @@ import { sendNotif } from "../schema/resolvers.js";
 
 const kafka = new Kafka({
     clientId: "notification-service",
-    brokers: ["localhost:29092"]
+    brokers: ["kafka:9092"]
 })
+const admin = kafka.admin()
 
 const consumer = kafka.consumer({groupId: "notification-group"})
 
 export async function startConsumer(){
     await consumer.connect();
-    await consumer.subscribe({topic: "notifications"})
+    await consumer.subscribe({topic: "notifications", fromBeginning: true})
     await consumer.run({
         eachMessage: async({message})=>{
             const data = JSON.parse(message.value.toString());

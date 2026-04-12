@@ -14,7 +14,7 @@ const typeDefs = gql`
     }
     type Query{
         getAllUsers:[User!]!
-        getUser(id:ID!):User!
+        getUser(email:String!):User!
         me:User!
     }
     type AuthPayload{
