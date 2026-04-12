@@ -15,6 +15,15 @@ const prisma = new PrismaClient({ adapter });
 const server = new ApolloServer({ typeDefs, resolvers });
 
 const startServer = async () => {
+  try {
+    await prisma.$connect();
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("✅ Prisma: connected to PostgreSQL (study-session-scheduling-service)");
+  } catch (err) {
+    console.error("❌ Prisma: database connection failed (study-session-scheduling-service):", err?.message || err);
+    throw err;
+  }
+
   await connectProducer();
 
   const { url } = await startStandaloneServer(server, {
