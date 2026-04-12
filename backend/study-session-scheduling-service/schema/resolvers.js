@@ -9,6 +9,17 @@ const assertSelf = (context, userId) => {
   if (context.user.id !== userId) throw new Error("Not authorized");
 };
 
+const buildSessionUpdateData = (input) => {
+  const data = {};
+  if (input.topic !== undefined && input.topic !== null) data.topic = input.topic;
+  if (input.description !== undefined) data.description = input.description;
+  if (input.dateTime !== undefined && input.dateTime !== null) data.dateTime = new Date(input.dateTime);
+  if (input.duration !== undefined && input.duration !== null) data.duration = input.duration;
+  if (input.sessionType !== undefined && input.sessionType !== null) data.sessionType = input.sessionType;
+  if (input.contactInfo !== undefined) data.contactInfo = input.contactInfo;
+  return data;
+};
+
 const resolvers = {
   Query: {
     session: async (_, { id }, context) => {
@@ -98,6 +109,54 @@ const resolvers = {
 
       return session;
     },
+    updateSession: async (_, { sessionId, input }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+
+      const updateData = buildSessionUpdateData(input);
+      if (Object.keys(updateData).length === 0) {
+        throw new Error("At least one field must be provided to update the session");
+      }
+
+      const existing = await prisma.studySession.findUnique({
+        where: { id: sessionId },
+        include: { participants: true },
+      });
+      if (!existing) throw new Error("Session not found");
+      if (existing.creatorId !== context.user.id) {
+        throw new Error("Only the session creator can update the session");
+      }
+
+      const session = await prisma.studySession.update({
+        where: { id: sessionId },
+        data: updateData,
+        include: { participants: true },
+      });
+
+      await publishDomainEvent("study-session-events", "StudySessionUpdated", {
+        sessionId: session.id,
+        creatorId: session.creatorId,
+        topic: session.topic,
+        dateTime: session.dateTime,
+        duration: session.duration,
+        sessionType: session.sessionType,
+      });
+
+      const when = session.dateTime.toISOString?.() ?? String(session.dateTime);
+      const joinerIds = session.participants
+        .map((p) => p.userId)
+        .filter((uid) => uid !== session.creatorId);
+
+      for (const recipient of joinerIds) {
+        await publishNotification({
+          recipient,
+          subject: "Study session updated",
+          message: `The session "${session.topic}" was updated by the host. New time: ${when}.`,
+        });
+      }
+
+      return session;
+    },
     joinSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
@@ -134,6 +193,13 @@ const resolvers = {
     leaveSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
+
+      const beforeLeave = await prisma.studySession.findUnique({
+        where: { id: sessionId },
+        include: { participants: true },
+      });
+      if (!beforeLeave) throw new Error("Session not found");
+
       await prisma.sessionParticipant.deleteMany({ where: { sessionId, userId } });
       const session = await prisma.studySession.findUnique({ where: { id: sessionId }, include: { participants: true } });
 
@@ -143,14 +209,27 @@ const resolvers = {
         creatorId: session?.creatorId ?? null,
       });
 
+      if (userId !== beforeLeave.creatorId) {
+        await publishNotification({
+          recipient: beforeLeave.creatorId,
+          subject: "Someone left your session",
+          message: `User ${userId} left your session "${beforeLeave.topic}".`,
+        });
+      }
+
       return session;
     },
     cancelSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
-      const session = await prisma.studySession.findUnique({ where: { id: sessionId } });
+      const session = await prisma.studySession.findUnique({
+        where: { id: sessionId },
+        include: { participants: true },
+      });
       if (!session) throw new Error("Session not found");
       if (session.creatorId !== userId) throw new Error("Only creator can cancel the session");
+
+      const joinerIds = session.participants.map((p) => p.userId).filter((uid) => uid !== session.creatorId);
 
       await prisma.sessionParticipant.deleteMany({ where: { sessionId } });
       await prisma.studySession.delete({ where: { id: sessionId } });
@@ -166,6 +245,15 @@ const resolvers = {
         subject: "Study session cancelled",
         message: `Your session "${session.topic}" was cancelled.`,
       });
+
+      for (const recipient of joinerIds) {
+        await publishNotification({
+          recipient,
+          subject: "Study session cancelled",
+          message: `The session "${session.topic}" was cancelled by the host.`,
+        });
+      }
+
       return true;
     },
   },

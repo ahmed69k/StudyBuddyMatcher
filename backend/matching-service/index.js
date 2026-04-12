@@ -16,6 +16,15 @@ const prisma = new PrismaClient({ adapter });
 const server = new ApolloServer({ typeDefs, resolvers });
 
 const startServer = async () => {
+  try {
+    await prisma.$connect();
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("✅ Prisma: connected to PostgreSQL (matching-service)");
+  } catch (err) {
+    console.error("❌ Prisma: database connection failed (matching-service):", err?.message || err);
+    throw err;
+  }
+
   // Don't block GraphQL startup on Kafka availability.
   // (Kafka may be down in dev; service should still run.)
   connectProducer().catch(() => {});
