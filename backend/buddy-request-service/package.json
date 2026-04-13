@@ -1,0 +1,27 @@
+{
+  "name": "buddy-request-service",
+  "version": "1.0.0",
+  "description": "Study buddy requests: send, accept, decline, cancel",
+  "license": "ISC",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@apollo/server": "^5.4.0",
+    "@prisma/adapter-pg": "^7.5.0",
+    "@prisma/client": "^7.5.0",
+    "dotenv": "^16.4.7",
+    "graphql": "^16.13.1",
+    "graphql-tag": "^2.12.6",
+    "jsonwebtoken": "^9.0.3",
+    "kafkajs": "^2.2.4",
+    "prisma": "^7.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0"
+  }
+}
