@@ -3,7 +3,7 @@ import "dotenv/config";
 
 const kafka = new Kafka({
   clientId: "matching-service",
-  brokers: [process.env.KAFKA_BROKER || "localhost:29092"],
+  brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
   retry: {
     retries: Number(process.env.KAFKA_RETRIES || 1),
     initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 100),
