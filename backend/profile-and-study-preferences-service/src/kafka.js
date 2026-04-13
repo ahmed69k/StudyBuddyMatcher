@@ -32,7 +32,7 @@ export const publishEvent = async (eventName, payload) => {
   };
 
   await producer.send({
-    topic: 'notifications',
+    topic: 'user-events',
     messages: [{ value: JSON.stringify(message) }],
   });
 

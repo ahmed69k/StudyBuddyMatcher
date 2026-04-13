@@ -26,6 +26,17 @@ services:
       - "3000:3000"
     env_file:
       - ./user-and-auth-service/.env
+
+  profile-and-study-preferences-service:
+    depends_on:
+      - kafka
+    build: ./profile-and-study-preferences-service
+    ports:
+      - "3001:3001"
+    environment:
+      KAFKA_BROKER: kafka:9092
+    env_file:
+      - ./profile-and-study-preferences-service/.env  
   notification-service:
     depends_on:
       - kafka
