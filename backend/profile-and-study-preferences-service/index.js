@@ -13,7 +13,7 @@ const server = new ApolloServer({
 });
 
 const { url } = await startStandaloneServer(server, {
-  listen: { port: 3001 },
+  listen: { port: 3001, host: '0.0.0.0' },
   context: async ({ req }) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '').trim();
