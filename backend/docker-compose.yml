@@ -83,4 +83,16 @@ services:
     env_file:
       - path: ./buddy-request-service/.env
         required: false
-  
+
+  availability-management-service:
+    depends_on:
+      - kafka
+    build: ./availability-management-service
+    ports:
+      - "4003:4003"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "4003"
+    env_file:
+      - path: ./availability-management-service/.env
+        required: false
