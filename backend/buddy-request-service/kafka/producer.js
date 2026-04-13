@@ -6,8 +6,8 @@ const kafka = new Kafka({
   clientId: "buddy-request-service",
   brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
   retry: {
-    retries: Number(process.env.KAFKA_RETRIES || 1),
-    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 100),
+    retries: Number(process.env.KAFKA_RETRIES || 8),
+    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 300),
   },
 });
 

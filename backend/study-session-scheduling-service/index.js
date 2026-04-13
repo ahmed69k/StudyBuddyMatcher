@@ -12,28 +12,64 @@ import "dotenv/config";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const server = new ApolloServer({ typeDefs, resolvers });
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  introspection: true,
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const connectPrismaWithRetry = async () => {
+  const maxAttempts = Number(process.env.PRISMA_CONNECT_RETRIES || 10);
+  const delayMs = Number(process.env.PRISMA_CONNECT_DELAY_MS || 1500);
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await prisma.$connect();
+      await prisma.$queryRaw`SELECT 1`;
+      if (attempt > 1) {
+        console.log(
+          `✅ Prisma: connected (study-session-scheduling-service) on attempt ${attempt}`
+        );
+      } else {
+        console.log("✅ Prisma: connected to PostgreSQL (study-session-scheduling-service)");
+      }
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `⚠️ Prisma connect attempt ${attempt}/${maxAttempts} failed (study-session-scheduling-service):`,
+        err?.message || err
+      );
+      if (attempt < maxAttempts) await sleep(delayMs);
+    }
+  }
+  throw lastErr;
+};
+
+const port = Number(process.env.PORT) || 4005;
+const jwtSecret = process.env.SECRET_KEY?.trim();
 
 const startServer = async () => {
-  try {
-    await prisma.$connect();
-    await prisma.$queryRaw`SELECT 1`;
-    console.log("✅ Prisma: connected to PostgreSQL (study-session-scheduling-service)");
-  } catch (err) {
-    console.error("❌ Prisma: database connection failed (study-session-scheduling-service):", err?.message || err);
-    throw err;
-  }
+  await connectPrismaWithRetry();
 
-  await connectProducer();
+  connectProducer().catch((err) =>
+    console.warn("⚠️ Kafka producer (study-session-scheduling-service):", err?.message || err)
+  );
 
   const { url } = await startStandaloneServer(server, {
-    listen: { port: process.env.PORT || 4005, host: "0.0.0.0" },
+    listen: { port, host: "0.0.0.0" },
     context: async ({ req }) => {
       const authHeader = req.headers.authorization || "";
       const token = authHeader.replace("Bearer ", "").trim();
       if (!token) return { user: null, prisma };
+      if (!jwtSecret) {
+        console.warn("study-session-scheduling-service: SECRET_KEY is not set");
+        return { user: null, prisma };
+      }
       try {
-        const user = jwt.verify(token, process.env.SECRET_KEY);
+        const user = jwt.verify(token, jwtSecret);
         return { user, prisma };
       } catch (err) {
         console.warn("Invalid token:", err.message);
