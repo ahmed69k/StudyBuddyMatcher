@@ -1,4 +1,8 @@
 import { prisma } from "../index.js"
+import { PubSub } from "graphql-subscriptions";
+
+export const pubsub = new PubSub();
+
 const resolvers = {
     Query:{
         getUserConversations: async(_,__,context)=>{
@@ -61,10 +65,21 @@ const resolvers = {
                     message: message
                 }
             })
+            pubsub.publish(`MESSAGE_SENT_${input.conversationId}`,{
+                messageSent: newMessage
+            })
             return {
                 response: "Success!",
                 message: newMessage
             };
+        }
+    },
+    Subscription:{
+        messageSent:{
+            subscribe: (_,{conversationId})=>{
+                            if (!conversationId) throw new Error("conversationId is required");
+            return pubsub.asyncIterableIterator(`MESSAGE_SENT_${conversationId}`);
+            }
         }
     }
 }

@@ -1,0 +1,73 @@
+# Kafka (KRaft — no Zookeeper), same style as the lab: apache/kafka:3.7.2
+# - 9092 -> PLAINTEXT; from other containers use bootstrap kafka:9092
+# - 9094 -> CONTROLLER (internal to the container; not published)
+services:
+  kafka:
+    image: apache/kafka:3.7.2
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  user-and-auth-service:
+    build: ./user-and-auth-service
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./user-and-auth-service/.env
+  notification-service:
+    depends_on:
+      - kafka
+    build: ./notification-service/
+    ports:
+      - "4000:4000"
+    environment:
+      KAFKA_BROKER: kafka:9092
+    env_file:
+      - ./notification-service/.env
+
+  matching-service:
+    depends_on:
+      - kafka
+    build: ./matching-service
+    ports:
+      - "4002:4002"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "4002"
+    env_file:
+      - path: ./matching-service/.env
+        required: false
+
+  study-session-scheduling-service:
+    depends_on:
+      - kafka
+    build: ./study-session-scheduling-service
+    ports:
+      - "4005:4005"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "4005"
+    env_file:
+      - path: ./study-session-scheduling-service/.env
+        required: false
+
+  messaging-service:
+    build: ./messaging-service
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    env_file:
+      - ./messaging-service/.env
+  

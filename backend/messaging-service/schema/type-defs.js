@@ -33,6 +33,9 @@ const typeDefs = gql`
     input CreateConversationInput{
         addedUser:ID!
     }
+    type Subscription{
+        messageSent(conversationId: ID!):Message!
+    }
     `
 
 export default typeDefs
