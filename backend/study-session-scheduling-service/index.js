@@ -27,7 +27,7 @@ const startServer = async () => {
   await connectProducer();
 
   const { url } = await startStandaloneServer(server, {
-    listen: { port: process.env.PORT || 4005 },
+    listen: { port: process.env.PORT || 4005, host: "0.0.0.0" },
     context: async ({ req }) => {
       const authHeader = req.headers.authorization || "";
       const token = authHeader.replace("Bearer ", "").trim();

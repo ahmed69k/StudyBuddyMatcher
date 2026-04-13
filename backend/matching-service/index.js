@@ -31,7 +31,7 @@ const startServer = async () => {
   startConsumer(prisma).catch(() => {});
 
   const { url } = await startStandaloneServer(server, {
-    listen: { port: process.env.PORT || 4002 },
+    listen: { port: process.env.PORT || 4002, host: "0.0.0.0" },
     context: async ({ req }) => {
       const authHeader = req.headers.authorization || "";
       const token = authHeader.replace("Bearer ", "").trim();

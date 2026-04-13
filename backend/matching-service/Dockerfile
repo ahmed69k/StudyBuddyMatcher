@@ -10,7 +10,7 @@ RUN npm ci
 COPY . .
 RUN npx prisma generate
 
-EXPOSE 4004
+EXPOSE 4002
 
 # Optional at runtime: set PORT via env
 CMD ["npm", "run", "start"]
