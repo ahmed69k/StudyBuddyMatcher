@@ -168,14 +168,20 @@ const resolvers = {
         throw new Error("Not authorized");
       }
 
-      await prisma.availability.delete({
-        where: { id }
+      // ORIGINAL: delete first, then Kafka with only { id, userId } (matching consumer could not derive slot string).
+      // await prisma.availability.delete({ where: { id } });
+      // await publishEvent("AvailabilityDeleted", { id, userId: context.user.id });
+      // EDIT: publish full slot before delete so matching-service can remove the correct availability string.
+      await publishEvent("AvailabilityDeleted", {
+        id: existing.id,
+        userId: existing.userId,
+        dayOfWeek: existing.dayOfWeek,
+        startHour: existing.startHour,
+        endHour: existing.endHour,
       });
 
-      // Kafka event
-      await publishEvent("AvailabilityDeleted", {
-        id,
-        userId: context.user.id
+      await prisma.availability.delete({
+        where: { id }
       });
 
       return {

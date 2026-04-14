@@ -23,6 +23,8 @@ const kafka = new Kafka({
 const groupId = process.env.KAFKA_GROUP_ID || "matching-group";
 const consumer = kafka.consumer({ groupId });
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const getEnvelope = (raw) => {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
@@ -47,14 +49,37 @@ export const startConsumer = async (prisma) => {
     return;
   }
 
+  // ORIGINAL comment block:
   // Align with existing repo:
   // - profile service publishes UserPreferencesUpdated to topic "notifications" (enveloped)
   // - availability service publishes AvailabilityCreated/Updated/Deleted to topic "availability-updates" (enveloped)
-  try {
-    await consumer.subscribe({ topic: "notifications" });
-    await consumer.subscribe({ topic: "availability-updates" });
-  } catch (err) {
-    console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", err?.message || err);
+  // EDIT comment:
+  // notifications: UserPreferencesUpdated (profile) — matching handles; NotificationRequested (others) — notification-service.
+  // availability-updates: AvailabilityCreated | Updated | Deleted (availability-management-service).
+  // ORIGINAL subscribe (single try, no retry/backoff):
+  // try {
+  //   await consumer.subscribe({ topic: "notifications" });
+  //   await consumer.subscribe({ topic: "availability-updates" });
+  // } catch (err) {
+  //   console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", err?.message || err);
+  //   return;
+  // }
+  const maxSubscribeAttempts = Number(process.env.KAFKA_SUBSCRIBE_RETRIES || 12);
+  let subscribeErr;
+  for (let attempt = 1; attempt <= maxSubscribeAttempts; attempt++) {
+    try {
+      await consumer.subscribe({ topic: "notifications" });
+      await consumer.subscribe({ topic: "availability-updates" });
+      subscribeErr = null;
+      break;
+    } catch (err) {
+      subscribeErr = err;
+      if (attempt === maxSubscribeAttempts) break;
+      await sleep(400 * attempt);
+    }
+  }
+  if (subscribeErr) {
+    console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", subscribeErr?.message || subscribeErr);
     return;
   }
 

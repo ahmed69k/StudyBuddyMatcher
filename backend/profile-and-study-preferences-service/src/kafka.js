@@ -43,8 +43,14 @@ export const publishEvent = async (eventName, payload) => {
     payload,
   };
 
+  // ORIGINAL:
+  // await producer.send({
+  //   topic: 'user-events',
+  //   messages: [{ value: JSON.stringify(message) }],
+  // });
+  // EDIT: topic `notifications` so matching-service consumes UserPreferencesUpdated on the same topic contract.
   await producer.send({
-    topic: 'user-events',
+    topic: 'notifications',
     messages: [{ value: JSON.stringify(message) }],
   });
 

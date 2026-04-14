@@ -25,14 +25,13 @@ const server = new ApolloServer({
 });
 
 // ORIGINAL: default port was 4000 (same as notifications if both ran locally)
-// EDIT: TEAM SCHEME — AVAILABILITY = 3002 (USER 3000, PROFILE 3001, … NOTIF 3005)
+// EDIT: TEAM SCHEME — AVAILABILITY = 3002 (auth host 3007→3000 in compose, profile 3001, … notif 3005)
 const port = Number(process.env.PORT) || 3002;
 
 // START EVERYTHING
 const startServer = async () => {
   try {
-    // ORIGINAL: await connectProducer();
-    // EDIT: KAFKA NON-BLOCKING SO GRAPHQL LISTENS EVEN IF BROKER IS SLOW
+    // Warm Kafka in background; publishEvent() also awaits connectProducer() so sends never race ahead of connect.
     connectProducer().catch((err) =>
       console.error("❌ Kafka producer (availability):", err?.message || err)
     );

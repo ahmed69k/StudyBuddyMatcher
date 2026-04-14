@@ -51,13 +51,24 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
   });
 };
 
-// Align with existing notification-service consumer which expects:
-// { recipient, subject, message } (flat, no envelope)
+// ORIGINAL:
+// await producer.send({
+//   topic: "notifications",
+//   messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
+// });
+/** EDIT: enveloped NotificationRequested for notification-service. */
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
+  const envelope = {
+    event: "NotificationRequested",
+    timestamp: new Date().toISOString(),
+    producerService: "study-session-scheduling-service",
+    correlationId: randomUUID(),
+    payload: { recipient, subject, message },
+  };
   await producer.send({
     topic: "notifications",
-    messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
+    messages: [{ value: JSON.stringify(envelope) }],
   });
 };
 

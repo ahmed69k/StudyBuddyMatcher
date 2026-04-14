@@ -6,12 +6,14 @@ import { buildHTTPExecutor } from "@graphql-tools/executor-http";
 import { schemaFromExecutor } from "@graphql-tools/wrap";
 
 /**
- * Team HTTP ports: auth 3000, profile 3001, availability 3002, matching 3003,
+ * Docker network (service:port): auth 3000, profile 3001, availability 3002, matching 3003,
  * study session 3004, notifications 3005, buddy request 3006. Gateway: 4001.
- * [label, envVar, local default] — Apollo standalone: POST to service root `/`.
+ * Host machine (docker-compose publish): auth is localhost:3007 → container 3000; other services match their port.
+ * [label, envVar, local default when gateway runs on host] — Apollo: POST to service root `/`.
  */
 const SUBGRAPH_SPECS = [
-  ["auth", "AUTH_GRAPHQL_URL", "http://127.0.0.1:3000/"],
+  // ORIGINAL auth fallback when gateway runs on host: "http://127.0.0.1:3000/" (auth in Docker is published on 3007).
+  ["auth", "AUTH_GRAPHQL_URL", "http://127.0.0.1:3007/"],
   ["profile", "PROFILE_GRAPHQL_URL", "http://127.0.0.1:3001/"],
   ["notification", "NOTIFICATION_GRAPHQL_URL", "http://127.0.0.1:3005/"],
   ["matching", "MATCHING_GRAPHQL_URL", "http://127.0.0.1:3003/"],
@@ -95,3 +97,6 @@ const { url } = await startStandaloneServer(server, {
 });
 
 console.log(`[graphql-gateway] ready at ${url}`);
+// ORIGINAL: only the line above (no localhost hint).
+// EDIT: clarify browser URL because Apollo may print http://0.0.0.0:PORT/ which Edge rejects.
+console.log(`[graphql-gateway] use in browser: http://localhost:${port}/ (0.0.0.0 is listen-only, not a valid browser URL)`);
