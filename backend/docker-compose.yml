@@ -23,7 +23,9 @@ services:
   user-and-auth-service:
     build: ./user-and-auth-service
     ports:
-      - "3000:3000"
+      # ORIGINAL: - "3000:3000"
+      # EDIT: Host 3007 avoids bind errors when something (e.g. local node) already uses 3000; in-network URL stays :3000
+      - "3007:3000"
     env_file:
       - ./user-and-auth-service/.env
 
@@ -130,6 +132,7 @@ services:
       - buddy-request-service
     environment:
       PORT: "4001"
+      # Service hostname + container listen port (3000). Host browser: http://localhost:3007/
       AUTH_GRAPHQL_URL: http://user-and-auth-service:3000/
       PROFILE_GRAPHQL_URL: http://profile-and-study-preferences-service:3001/
       NOTIFICATION_GRAPHQL_URL: http://notification-service:3005/
