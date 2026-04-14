@@ -10,16 +10,11 @@ import "dotenv/config";
 
 const adapter = new PrismaPg({connectionString: process.env.DATABASE_URL})
 export const prisma = new PrismaClient({adapter});
-// ORIGINAL: const server = new ApolloServer({ typeDefs, resolvers }); // no introspection
 const server = new ApolloServer({
   typeDefs,
   resolvers,
-  // EDIT: INTROSPECTION ON FOR GRAPHQL GATEWAY / TOOLING
   introspection: true,
 });
-
-// ORIGINAL: jwt.verify(token, process.env.SECRET_KEY) inline in context (no trim / no jwtSecret const)
-// EDIT: TRIM JWT SECRET FROM .ENV
 const jwtSecret = process.env.SECRET_KEY?.trim();
 
 const { url } = await startStandaloneServer(server, {
@@ -31,17 +26,12 @@ const { url } = await startStandaloneServer(server, {
     if (!token) {
       return { user: null };
     }
-
-    // ORIGINAL: no missing-secret guard
-    // EDIT: GUARD IF SECRET_KEY MISSING
     if (!jwtSecret) {
       console.warn("user-and-auth-service: SECRET_KEY is not set");
       return { user: null };
     }
 
     try {
-      // ORIGINAL: const user = jwt.verify(token, process.env.SECRET_KEY);
-      // EDIT: VERIFY WITH TRIMMED SECRET
       const user = jwt.verify(token, jwtSecret);
       return { user };
     } catch (err) {
