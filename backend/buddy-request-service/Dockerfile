@@ -8,6 +8,6 @@ RUN npm ci
 COPY . .
 RUN npx prisma generate
 
-EXPOSE 4006
+EXPOSE 3006
 
 CMD ["npm", "run", "start"]

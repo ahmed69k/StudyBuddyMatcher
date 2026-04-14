@@ -15,24 +15,31 @@ const adapter = new PrismaPg({
 
 export const prisma = new PrismaClient({ adapter });
 
-// Apollo Server
+// APOLLO SERVER
+// ORIGINAL: const server = new ApolloServer({ typeDefs, resolvers });
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  // EDIT: INTROSPECTION ON FOR GRAPHQL GATEWAY / TOOLING
   introspection: true,
 });
 
-const port = Number(process.env.PORT) || 4003;
+// ORIGINAL: default port was 4000 (same as notifications if both ran locally)
+// EDIT: TEAM SCHEME — AVAILABILITY = 3002 (USER 3000, PROFILE 3001, … NOTIF 3005)
+const port = Number(process.env.PORT) || 3002;
 
-// Start everything
+// START EVERYTHING
 const startServer = async () => {
   try {
-    // Do not block GraphQL on Kafka (gateway and dev UX stay up if broker is slow/down).
+    // ORIGINAL: await connectProducer();
+    // EDIT: KAFKA NON-BLOCKING SO GRAPHQL LISTENS EVEN IF BROKER IS SLOW
     connectProducer().catch((err) =>
       console.error("❌ Kafka producer (availability):", err?.message || err)
     );
 
     const { url } = await startStandaloneServer(server, {
+      // ORIGINAL: listen: { port: process.env.PORT || 4000 } then 4003
+      // EDIT: 0.0.0.0 SO OTHER DOCKER CONTAINERS CAN REACH THIS SERVICE
       listen: { port, host: "0.0.0.0" },
       context: async ({ req }) => {
         const authHeader = req.headers.authorization || "";

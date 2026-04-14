@@ -12,14 +12,27 @@ import "dotenv/config";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+// ORIGINAL: const server = new ApolloServer({ typeDefs, resolvers });
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  // EDIT: INTROSPECTION ON FOR GRAPHQL GATEWAY / TOOLING
   introspection: true,
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ORIGINAL (PRISMA THEN AWAIT KAFKA THEN HTTP):
+// try {
+//   await prisma.$connect();
+//   await prisma.$queryRaw`SELECT 1`;
+//   console.log("✅ Prisma: connected to PostgreSQL (study-session-scheduling-service)");
+// } catch (err) {
+//   console.error("❌ Prisma: database connection failed (study-session-scheduling-service):", err?.message || err);
+//   throw err;
+// }
+// await connectProducer();
+// EDIT: RETRY PRISMA WHEN DB / NEON IS SLOW TO ACCEPT CONNECTIONS
 const connectPrismaWithRetry = async () => {
   const maxAttempts = Number(process.env.PRISMA_CONNECT_RETRIES || 10);
   const delayMs = Number(process.env.PRISMA_CONNECT_DELAY_MS || 1500);
@@ -48,12 +61,18 @@ const connectPrismaWithRetry = async () => {
   throw lastErr;
 };
 
-const port = Number(process.env.PORT) || 4005;
+// ORIGINAL: listen used process.env.PORT || 4005 inline (later 3004)
+// EDIT: PARSE PORT FROM ENV (TEAM SCHEME: STUDY SESSION = 3004)
+const port = Number(process.env.PORT) || 3004;
+// ORIGINAL: jwt.verify(token, process.env.SECRET_KEY)
+// EDIT: TRIM JWT SECRET FROM .ENV
 const jwtSecret = process.env.SECRET_KEY?.trim();
 
 const startServer = async () => {
   await connectPrismaWithRetry();
 
+  // ORIGINAL: await connectProducer();
+  // EDIT: KAFKA NON-BLOCKING (DO NOT AWAIT BEFORE HTTP)
   connectProducer().catch((err) =>
     console.warn("⚠️ Kafka producer (study-session-scheduling-service):", err?.message || err)
   );
@@ -64,11 +83,15 @@ const startServer = async () => {
       const authHeader = req.headers.authorization || "";
       const token = authHeader.replace("Bearer ", "").trim();
       if (!token) return { user: null, prisma };
+      // ORIGINAL: no missing-secret guard
+      // EDIT: GUARD IF SECRET_KEY MISSING
       if (!jwtSecret) {
         console.warn("study-session-scheduling-service: SECRET_KEY is not set");
         return { user: null, prisma };
       }
       try {
+        // ORIGINAL: const user = jwt.verify(token, process.env.SECRET_KEY);
+        // EDIT: VERIFY WITH TRIMMED SECRET
         const user = jwt.verify(token, jwtSecret);
         return { user, prisma };
       } catch (err) {

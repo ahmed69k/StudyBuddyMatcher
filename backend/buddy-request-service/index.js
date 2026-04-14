@@ -14,14 +14,27 @@ const adapter = new PrismaPg({
 
 export const prisma = new PrismaClient({ adapter });
 
+// ORIGINAL: ApolloServer({ typeDefs, resolvers, introspection: true }) — same fields; startup below changed
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  // EDIT: INTROSPECTION ON FOR GRAPHQL GATEWAY
   introspection: true,
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ORIGINAL (PRISMA ONCE THEN AWAIT KAFKA):
+// try {
+//   await prisma.$connect();
+//   await prisma.$queryRaw`SELECT 1`;
+//   console.log("✅ Prisma: connected (buddy-request-service)");
+// } catch (err) {
+//   console.error("❌ Prisma: database connection failed (buddy-request-service):", err?.message || err);
+//   throw err;
+// }
+// await connectProducer();
+// EDIT: RETRY PRISMA WHEN DB IS SLOW
 const connectPrismaWithRetry = async () => {
   const maxAttempts = Number(process.env.PRISMA_CONNECT_RETRIES || 10);
   const delayMs = Number(process.env.PRISMA_CONNECT_DELAY_MS || 1500);
@@ -48,12 +61,18 @@ const connectPrismaWithRetry = async () => {
   throw lastErr;
 };
 
-const port = Number(process.env.PORT) || 4006;
+// ORIGINAL: Number(process.env.PORT) || 4006 was already used inline in listen
+// EDIT: PARSE PORT FROM ENV (TEAM SCHEME: BUDDY REQUEST = 3006)
+const port = Number(process.env.PORT) || 3006;
+// ORIGINAL: jwt.verify(token, process.env.SECRET_KEY)
+// EDIT: TRIM JWT SECRET FROM .ENV
 const jwtSecret = process.env.SECRET_KEY?.trim();
 
 const startServer = async () => {
   await connectPrismaWithRetry();
 
+  // ORIGINAL: await connectProducer();
+  // EDIT: KAFKA NON-BLOCKING (DO NOT AWAIT BEFORE HTTP)
   connectProducer().catch((err) =>
     console.warn("⚠️ Kafka producer (buddy-request-service):", err?.message || err)
   );
@@ -64,11 +83,15 @@ const startServer = async () => {
       const authHeader = req.headers.authorization || "";
       const token = authHeader.replace("Bearer ", "").trim();
       if (!token) return { user: null };
+      // ORIGINAL: no missing-secret guard
+      // EDIT: GUARD IF SECRET_KEY MISSING
       if (!jwtSecret) {
         console.warn("buddy-request-service: SECRET_KEY is not set");
         return { user: null };
       }
       try {
+        // ORIGINAL: const user = jwt.verify(token, process.env.SECRET_KEY);
+        // EDIT: VERIFY WITH TRIMMED SECRET
         const user = jwt.verify(token, jwtSecret);
         return { user };
       } catch (err) {
