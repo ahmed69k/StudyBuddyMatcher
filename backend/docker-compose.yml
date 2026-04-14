@@ -27,6 +27,8 @@ services:
     env_file:
       - ./user-and-auth-service/.env
 
+  # ORIGINAL: PROFILE SERVICE NOT LISTED IN COMPOSE
+  # EDIT: PROFILE SERVICE ADDED FOR GATEWAY / COMPOSE NETWORK
   profile-and-study-preferences-service:
     depends_on:
       - kafka
@@ -35,16 +37,20 @@ services:
       - "3001:3001"
     environment:
       KAFKA_BROKER: kafka:9092
+      # ORIGINAL: NO PORT KEY HERE (ONLY KAFKA_BROKER)
+      # EDIT: PORT MUST MATCH APP LISTEN PORT IN CONTAINER
+      PORT: "3001"
     env_file:
-      - ./profile-and-study-preferences-service/.env  
+      - ./profile-and-study-preferences-service/.env
   notification-service:
     depends_on:
       - kafka
     build: ./notification-service/
     ports:
-      - "4000:4000"
+      - "3005:3005"
     environment:
       KAFKA_BROKER: kafka:9092
+      PORT: "3005"
     env_file:
       - ./notification-service/.env
 
@@ -53,10 +59,10 @@ services:
       - kafka
     build: ./matching-service
     ports:
-      - "4002:4002"
+      - "3003:3003"
     environment:
       KAFKA_BROKER: kafka:9092
-      PORT: "4002"
+      PORT: "3003"
     env_file:
       - path: ./matching-service/.env
         required: false
@@ -66,10 +72,10 @@ services:
       - kafka
     build: ./study-session-scheduling-service
     ports:
-      - "4005:4005"
+      - "3004:3004"
     environment:
       KAFKA_BROKER: kafka:9092
-      PORT: "4005"
+      PORT: "3004"
     env_file:
       - path: ./study-session-scheduling-service/.env
         required: false
@@ -87,23 +93,47 @@ services:
       - kafka
     build: ./buddy-request-service
     ports:
-      - "4006:4006"
+      - "3006:3006"
     environment:
       KAFKA_BROKER: kafka:9092
-      PORT: "4006"
+      PORT: "3006"
     env_file:
       - path: ./buddy-request-service/.env
         required: false
 
+  # ORIGINAL: AVAILABILITY SERVICE NOT LISTED IN COMPOSE
+  # EDIT: AVAILABILITY SERVICE ADDED FOR GATEWAY (PORT 3002 IN TEAM SCHEME)
   availability-management-service:
     depends_on:
       - kafka
     build: ./availability-management-service
     ports:
-      - "4003:4003"
+      - "3002:3002"
     environment:
       KAFKA_BROKER: kafka:9092
-      PORT: "4003"
+      PORT: "3002"
     env_file:
       - path: ./availability-management-service/.env
         required: false
+
+  graphql-gateway:
+    build: ./graphql-gateway
+    ports:
+      - "4001:4001"
+    depends_on:
+      - user-and-auth-service
+      - profile-and-study-preferences-service
+      - notification-service
+      - matching-service
+      - availability-management-service
+      - study-session-scheduling-service
+      - buddy-request-service
+    environment:
+      PORT: "4001"
+      AUTH_GRAPHQL_URL: http://user-and-auth-service:3000/
+      PROFILE_GRAPHQL_URL: http://profile-and-study-preferences-service:3001/
+      NOTIFICATION_GRAPHQL_URL: http://notification-service:3005/
+      MATCHING_GRAPHQL_URL: http://matching-service:3003/
+      AVAILABILITY_GRAPHQL_URL: http://availability-management-service:3002/
+      STUDY_SESSION_GRAPHQL_URL: http://study-session-scheduling-service:3004/
+      BUDDY_REQUEST_GRAPHQL_URL: http://buddy-request-service:3006/

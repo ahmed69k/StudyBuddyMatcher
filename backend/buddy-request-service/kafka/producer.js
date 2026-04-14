@@ -5,6 +5,8 @@ import "dotenv/config";
 const kafka = new Kafka({
   clientId: "buddy-request-service",
   brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
+  // ORIGINAL: retries default 1, initialRetryTime default 100
+  // EDIT: HIGHER DEFAULT KAFKA RETRIES FOR SLOW BROKER STARTUP
   retry: {
     retries: Number(process.env.KAFKA_RETRIES || 8),
     initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 300),

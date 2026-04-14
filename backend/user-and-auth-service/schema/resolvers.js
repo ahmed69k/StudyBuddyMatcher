@@ -47,11 +47,16 @@ const resolvers ={
             if(!user) throw new Error("User not found.")
             const isValid = await bcrypt.compare(password, user.password)
             if(!isValid) throw new Error("Incorrect email or password.");
+            // ORIGINAL: jwt.sign({ id: user.id, email: user.email }, process.env.SECRET_KEY, { expiresIn: "1h" })
+            // EDIT: SIGN JWT WITH TRIMMED SECRET (MATCH OTHER SERVICES)
+            const secret = process.env.SECRET_KEY?.trim();
+            // EDIT: FAIL FAST IF SECRET MISSING (ORIGINAL HAD NO EXPLICIT CHECK)
+            if (!secret) throw new Error("Server configuration error.");
             const token = jwt.sign(
-                {id: user.id, email: user.email},
-                process.env.SECRET_KEY,
-                { expiresIn: "1h"}
-            )
+                { id: user.id, email: user.email },
+                secret,
+                { expiresIn: "1h" }
+            );
             return {
                 token, user
             }
