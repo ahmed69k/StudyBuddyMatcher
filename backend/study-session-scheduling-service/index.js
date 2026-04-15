@@ -7,6 +7,7 @@ const { PrismaClient } = pkg;
 import { PrismaPg } from "@prisma/adapter-pg";
 import jwt from "jsonwebtoken";
 import { connectProducer } from "./kafka/producer.js";
+import { startSessionReminderScheduler } from "./session-reminders.js";
 import "dotenv/config";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -76,6 +77,8 @@ const startServer = async () => {
   connectProducer().catch((err) =>
     console.warn("⚠️ Kafka producer (study-session-scheduling-service):", err?.message || err)
   );
+
+  startSessionReminderScheduler(prisma);
 
   const { url } = await startStandaloneServer(server, {
     listen: { port, host: "0.0.0.0" },
