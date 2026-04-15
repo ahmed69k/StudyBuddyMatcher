@@ -28,9 +28,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const getEnvelope = (raw) => {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
-  // Support both enveloped and flat messages.
-  if (parsed && typeof parsed === "object" && "event" in parsed && "payload" in parsed) return parsed;
-  return { event: null, payload: parsed };
+  if (!parsed || typeof parsed !== "object") return null;
+  // Spec envelope: eventName + payload. Legacy producers used `event` instead of eventName.
+  if ("payload" in parsed) {
+    const eventName = parsed.eventName ?? parsed.event ?? null;
+    if (eventName != null) return { eventName, payload: parsed.payload };
+  }
+  return { eventName: null, payload: parsed };
 };
 
 const availabilitySlotToString = (slot) => {
@@ -90,7 +94,7 @@ export const startConsumer = async (prisma) => {
         const env = getEnvelope(raw);
         if (!env) return;
 
-        if (topic === "notifications" && env.event === "UserPreferencesUpdated") {
+        if (topic === "notifications" && env.eventName === "UserPreferencesUpdated") {
           const payload = env.payload || {};
           const pref = payload.studyPreference || {};
 
@@ -121,10 +125,13 @@ export const startConsumer = async (prisma) => {
             },
           });
 
+          console.log(
+            `[matching-service] Kafka handled UserPreferencesUpdated topic=${topic} userId=${userId}`
+          );
           return;
         }
 
-        if (topic === "availability-updates" && env.event) {
+        if (topic === "availability-updates" && env.eventName) {
           const payload = env.payload || {};
           const userId = payload.userId;
           if (!userId) return;
@@ -144,22 +151,28 @@ export const startConsumer = async (prisma) => {
             });
           }
 
-          if (env.event === "AvailabilityDeleted") {
+          if (env.eventName === "AvailabilityDeleted") {
             const slotStr = availabilitySlotToString(payload);
             if (!slotStr) return;
             const current = await prisma.userProfile.findUnique({ where: { userId } });
             const next = (current?.availability || []).filter((s) => s !== slotStr);
             await prisma.userProfile.update({ where: { userId }, data: { availability: next } });
+            console.log(
+              `[matching-service] Kafka handled ${env.eventName} topic=${topic} userId=${userId} slot=${slotStr}`
+            );
             return;
           }
 
-          if (env.event === "AvailabilityCreated" || env.event === "AvailabilityUpdated") {
+          if (env.eventName === "AvailabilityCreated" || env.eventName === "AvailabilityUpdated") {
             const slotStr = availabilitySlotToString(payload);
             if (!slotStr) return;
             const current = await prisma.userProfile.findUnique({ where: { userId } });
             const set = new Set(current?.availability || []);
             set.add(slotStr);
             await prisma.userProfile.update({ where: { userId }, data: { availability: Array.from(set) } });
+            console.log(
+              `[matching-service] Kafka handled ${env.eventName} topic=${topic} userId=${userId} slot=${slotStr}`
+            );
             return;
           }
         }

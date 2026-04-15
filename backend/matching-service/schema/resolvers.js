@@ -285,6 +285,12 @@ const resolvers = {
           subject: "Buddy request accepted",
           message: `User ${updated.receiverId} accepted your study buddy request.`,
         });
+      } else {
+        await publishNotification({
+          recipient: updated.requesterId,
+          subject: "Buddy request declined",
+          message: `User ${updated.receiverId} declined your study buddy request.`,
+        });
       }
 
       return mapBuddyRequest(updated);
@@ -308,6 +314,12 @@ const resolvers = {
         requesterId: updated.requesterId,
         receiverId: updated.receiverId,
         status: updated.status,
+      });
+
+      await publishNotification({
+        recipient: updated.receiverId,
+        subject: "Buddy request withdrawn",
+        message: `User ${updated.requesterId} cancelled their study buddy request.`,
       });
 
       return mapBuddyRequest(updated);
