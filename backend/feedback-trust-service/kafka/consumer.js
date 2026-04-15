@@ -24,8 +24,13 @@ const consumer = kafka.consumer({ groupId });
 const getEnvelope = (raw) => {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
-  if (parsed && typeof parsed === "object" && "event" in parsed && "payload" in parsed) {
-    return parsed;
+  if (parsed && typeof parsed === "object" && "payload" in parsed) {
+    if ("event" in parsed) {
+      return { event: parsed.event, payload: parsed.payload };
+    }
+    if ("eventName" in parsed) {
+      return { event: parsed.eventName, payload: parsed.payload };
+    }
   }
   return null;
 };

@@ -7,7 +7,7 @@ import { schemaFromExecutor } from "@graphql-tools/wrap";
 
 /**
  * Docker network (service:port): auth 3000, profile 3001, availability 3002, matching 3003,
- * study session 3004, notifications 3005 (buddy requests live in matching). Gateway: 4001.
+ * study session 3004, notifications 3005, feedback trust 4010. Gateway: 4001.
  * Host machine (docker-compose publish): auth is localhost:3007 → container 3000; other services match their port.
  * [label, envVar, local default when gateway runs on host] — Apollo: POST to service root `/`.
  */
@@ -19,6 +19,7 @@ const SUBGRAPH_SPECS = [
   ["matching", "MATCHING_GRAPHQL_URL", "http://127.0.0.1:3003/"],
   ["availability", "AVAILABILITY_GRAPHQL_URL", "http://127.0.0.1:3002/"],
   ["studySession", "STUDY_SESSION_GRAPHQL_URL", "http://127.0.0.1:3004/"],
+  ["feedbackTrust", "FEEDBACK_TRUST_GRAPHQL_URL", "http://127.0.0.1:4010/"],
 ];
 
 function normalizeEndpoint(raw) {
