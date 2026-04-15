@@ -90,19 +90,6 @@ services:
     env_file:
       - ./messaging-service/.env
 
-  buddy-request-service:
-    depends_on:
-      - kafka
-    build: ./buddy-request-service
-    ports:
-      - "3006:3006"
-    environment:
-      KAFKA_BROKER: kafka:9092
-      PORT: "3006"
-    env_file:
-      - path: ./buddy-request-service/.env
-        required: false
-
   # ORIGINAL: AVAILABILITY SERVICE NOT LISTED IN COMPOSE
   # EDIT: AVAILABILITY SERVICE ADDED FOR GATEWAY (PORT 3002 IN TEAM SCHEME)
   availability-management-service:
@@ -129,7 +116,6 @@ services:
       - matching-service
       - availability-management-service
       - study-session-scheduling-service
-      - buddy-request-service
     environment:
       PORT: "4001"
       # Service hostname + container listen port (3000). Host browser: http://localhost:3007/
@@ -139,4 +125,3 @@ services:
       MATCHING_GRAPHQL_URL: http://matching-service:3003/
       AVAILABILITY_GRAPHQL_URL: http://availability-management-service:3002/
       STUDY_SESSION_GRAPHQL_URL: http://study-session-scheduling-service:3004/
-      BUDDY_REQUEST_GRAPHQL_URL: http://buddy-request-service:3006/
