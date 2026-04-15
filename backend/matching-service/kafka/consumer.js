@@ -4,9 +4,11 @@ import "dotenv/config";
 const kafka = new Kafka({
   clientId: "matching-service",
   brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
+  // ORIGINAL: retries: 1, initialRetryTime: 100 (via env defaults)
+  // EDIT: HIGHER DEFAULT RETRIES WHEN KAFKA STARTS AFTER THIS SERVICE
   retry: {
-    retries: Number(process.env.KAFKA_RETRIES || 1),
-    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 100),
+    retries: Number(process.env.KAFKA_RETRIES || 8),
+    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 300),
   },
   ...(process.env.KAFKA_USERNAME && {
     sasl: {
@@ -21,12 +23,18 @@ const kafka = new Kafka({
 const groupId = process.env.KAFKA_GROUP_ID || "matching-group";
 const consumer = kafka.consumer({ groupId });
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const getEnvelope = (raw) => {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
-  // Support both enveloped and flat messages.
-  if (parsed && typeof parsed === "object" && "event" in parsed && "payload" in parsed) return parsed;
-  return { event: null, payload: parsed };
+  if (!parsed || typeof parsed !== "object") return null;
+  // Spec envelope: eventName + payload. Legacy producers used `event` instead of eventName.
+  if ("payload" in parsed) {
+    const eventName = parsed.eventName ?? parsed.event ?? null;
+    if (eventName != null) return { eventName, payload: parsed.payload };
+  }
+  return { eventName: null, payload: parsed };
 };
 
 const availabilitySlotToString = (slot) => {
@@ -45,14 +53,37 @@ export const startConsumer = async (prisma) => {
     return;
   }
 
+  // ORIGINAL comment block:
   // Align with existing repo:
   // - profile service publishes UserPreferencesUpdated to topic "notifications" (enveloped)
   // - availability service publishes AvailabilityCreated/Updated/Deleted to topic "availability-updates" (enveloped)
-  try {
-    await consumer.subscribe({ topic: "notifications" });
-    await consumer.subscribe({ topic: "availability-updates" });
-  } catch (err) {
-    console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", err?.message || err);
+  // EDIT comment:
+  // notifications: UserPreferencesUpdated (profile) — matching handles; NotificationRequested (others) — notification-service.
+  // availability-updates: AvailabilityCreated | Updated | Deleted (availability-management-service).
+  // ORIGINAL subscribe (single try, no retry/backoff):
+  // try {
+  //   await consumer.subscribe({ topic: "notifications" });
+  //   await consumer.subscribe({ topic: "availability-updates" });
+  // } catch (err) {
+  //   console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", err?.message || err);
+  //   return;
+  // }
+  const maxSubscribeAttempts = Number(process.env.KAFKA_SUBSCRIBE_RETRIES || 12);
+  let subscribeErr;
+  for (let attempt = 1; attempt <= maxSubscribeAttempts; attempt++) {
+    try {
+      await consumer.subscribe({ topic: "notifications" });
+      await consumer.subscribe({ topic: "availability-updates" });
+      subscribeErr = null;
+      break;
+    } catch (err) {
+      subscribeErr = err;
+      if (attempt === maxSubscribeAttempts) break;
+      await sleep(400 * attempt);
+    }
+  }
+  if (subscribeErr) {
+    console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", subscribeErr?.message || subscribeErr);
     return;
   }
 
@@ -63,7 +94,7 @@ export const startConsumer = async (prisma) => {
         const env = getEnvelope(raw);
         if (!env) return;
 
-        if (topic === "notifications" && env.event === "UserPreferencesUpdated") {
+        if (topic === "notifications" && env.eventName === "UserPreferencesUpdated") {
           const payload = env.payload || {};
           const pref = payload.studyPreference || {};
 
@@ -94,10 +125,13 @@ export const startConsumer = async (prisma) => {
             },
           });
 
+          console.log(
+            `[matching-service] Kafka handled UserPreferencesUpdated topic=${topic} userId=${userId}`
+          );
           return;
         }
 
-        if (topic === "availability-updates" && env.event) {
+        if (topic === "availability-updates" && env.eventName) {
           const payload = env.payload || {};
           const userId = payload.userId;
           if (!userId) return;
@@ -117,22 +151,28 @@ export const startConsumer = async (prisma) => {
             });
           }
 
-          if (env.event === "AvailabilityDeleted") {
+          if (env.eventName === "AvailabilityDeleted") {
             const slotStr = availabilitySlotToString(payload);
             if (!slotStr) return;
             const current = await prisma.userProfile.findUnique({ where: { userId } });
             const next = (current?.availability || []).filter((s) => s !== slotStr);
             await prisma.userProfile.update({ where: { userId }, data: { availability: next } });
+            console.log(
+              `[matching-service] Kafka handled ${env.eventName} topic=${topic} userId=${userId} slot=${slotStr}`
+            );
             return;
           }
 
-          if (env.event === "AvailabilityCreated" || env.event === "AvailabilityUpdated") {
+          if (env.eventName === "AvailabilityCreated" || env.eventName === "AvailabilityUpdated") {
             const slotStr = availabilitySlotToString(payload);
             if (!slotStr) return;
             const current = await prisma.userProfile.findUnique({ where: { userId } });
             const set = new Set(current?.availability || []);
             set.add(slotStr);
             await prisma.userProfile.update({ where: { userId }, data: { availability: Array.from(set) } });
+            console.log(
+              `[matching-service] Kafka handled ${env.eventName} topic=${topic} userId=${userId} slot=${slotStr}`
+            );
             return;
           }
         }

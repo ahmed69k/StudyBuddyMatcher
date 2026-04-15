@@ -39,12 +39,12 @@ exports.Prisma = Prisma
 exports.$Enums = {}
 
 /**
- * Prisma Client JS version: 7.5.0
- * Query Engine version: 280c870be64f457428992c43c1f6d557fab6e29e
+ * Prisma Client JS version: 7.7.0
+ * Query Engine version: 75cbdc1eb7150937890ad5465d861175c6624711
  */
 Prisma.prismaVersion = {
-  client: "7.5.0",
-  engine: "280c870be64f457428992c43c1f6d557fab6e29e"
+  client: "7.7.0",
+  engine: "75cbdc1eb7150937890ad5465d861175c6624711"
 }
 
 Prisma.PrismaClientKnownRequestError = PrismaClientKnownRequestError;
@@ -146,8 +146,8 @@ exports.Prisma.ModelName = {
  */
 const config = {
   "previewFeatures": [],
-  "clientVersion": "7.5.0",
-  "engineVersion": "280c870be64f457428992c43c1f6d557fab6e29e",
+  "clientVersion": "7.7.0",
+  "engineVersion": "75cbdc1eb7150937890ad5465d861175c6624711",
   "activeProvider": "postgresql",
   "inlineSchema": "generator client {\n  provider = \"prisma-client-js\"\n  output   = \"../src/generated/prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n}\n\nmodel Profile {\n  id        String   @id @default(cuid())\n  userId    String   @unique\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  courses         Course[]\n  topics          Topic[]\n  studyPreference StudyPreference?\n}\n\nmodel Course {\n  id        String   @id @default(cuid())\n  name      String\n  profileId String\n  profile   Profile  @relation(fields: [profileId], references: [id])\n  createdAt DateTime @default(now())\n}\n\nmodel Topic {\n  id        String   @id @default(cuid())\n  name      String\n  profileId String\n  profile   Profile  @relation(fields: [profileId], references: [id])\n  createdAt DateTime @default(now())\n}\n\nmodel StudyPreference {\n  id        String  @id @default(cuid())\n  profileId String  @unique\n  profile   Profile @relation(fields: [profileId], references: [id])\n\n  pace       String\n  mode       String\n  groupSize  Int\n  studyStyle String\n\n  updatedAt DateTime @updatedAt\n}\n"
 }

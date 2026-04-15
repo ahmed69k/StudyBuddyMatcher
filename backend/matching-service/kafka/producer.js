@@ -5,9 +5,11 @@ import "dotenv/config";
 const kafka = new Kafka({
   clientId: "matching-service",
   brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
+  // ORIGINAL: retries: Number(process.env.KAFKA_RETRIES || 1), initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 100),
+  // EDIT: HIGHER DEFAULT RETRIES WHEN KAFKA STARTS AFTER THIS SERVICE
   retry: {
-    retries: Number(process.env.KAFKA_RETRIES || 1),
-    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 100),
+    retries: Number(process.env.KAFKA_RETRIES || 8),
+    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 300),
   },
   ...(process.env.KAFKA_USERNAME && {
     sasl: {
@@ -36,7 +38,7 @@ export const connectProducer = async () => {
 export const publishDomainEvent = async (topic, eventName, payload) => {
   if (!isConnected) return;
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: "matching-service",
     correlationId: randomUUID(),
@@ -49,13 +51,40 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
   });
 };
 
-// Align with existing notification-service consumer which expects:
-// { recipient, subject, message } (flat, no envelope)
+// ORIGINAL: flat body only — notification consumer expected { recipient, subject, message } at top level.
+// await producer.send({
+//   topic: "notifications",
+//   messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
+// });
+/** EDIT: same envelope as buddy-request / study-session → notification-service consumer. */
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
+  const envelope = {
+    eventName: "NotificationRequested",
+    timestamp: new Date().toISOString(),
+    producerService: "matching-service",
+    correlationId: randomUUID(),
+    payload: { recipient, subject, message },
+  };
   await producer.send({
     topic: "notifications",
-    messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
+    messages: [{ value: JSON.stringify(envelope) }],
+  });
+};
+
+/** Buddy-request lifecycle on topic consumed by downstream services (same topic as former buddy-request-service). */
+export const publishBuddyRequestEvent = async (eventName, payload) => {
+  if (!isConnected) return;
+  const message = {
+    eventName,
+    timestamp: new Date().toISOString(),
+    producerService: "matching-service",
+    correlationId: randomUUID(),
+    payload,
+  };
+  await producer.send({
+    topic: "buddy-request-updates",
+    messages: [{ value: JSON.stringify(message) }],
   });
 };
 

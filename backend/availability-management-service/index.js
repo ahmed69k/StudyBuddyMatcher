@@ -15,40 +15,39 @@ const adapter = new PrismaPg({
 
 export const prisma = new PrismaClient({ adapter });
 
-// Apollo Server
+// APOLLO SERVER
+// ORIGINAL: const server = new ApolloServer({ typeDefs, resolvers });
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  // EDIT: INTROSPECTION ON FOR GRAPHQL GATEWAY / TOOLING
   introspection: true,
 });
 
-// Start everything
+// ORIGINAL: default port was 4000 (same as notifications if both ran locally)
+// EDIT: TEAM SCHEME — AVAILABILITY = 3002 (auth host 3007→3000 in compose, profile 3001, … notif 3005)
+const port = Number(process.env.PORT) || 3002;
+
+// START EVERYTHING
 const startServer = async () => {
   try {
-    // Connect Kafka first
-    await connectProducer(); 
+    // Warm Kafka in background; publishEvent() also awaits connectProducer() so sends never race ahead of connect.
+    connectProducer().catch((err) =>
+      console.error("❌ Kafka producer (availability):", err?.message || err)
+    );
 
     const { url } = await startStandaloneServer(server, {
-      listen: { port: process.env.PORT || 4000 },
-
+      // ORIGINAL: listen: { port: process.env.PORT || 4000 } then 4003
+      // EDIT: 0.0.0.0 SO OTHER DOCKER CONTAINERS CAN REACH THIS SERVICE
+      listen: { port, host: "0.0.0.0" },
       context: async ({ req }) => {
         const authHeader = req.headers.authorization || "";
         const token = authHeader.replace("Bearer ", "").trim();
 
         if (!token) {
-          return { user: null }; 
+          return { user: null };
         }
 
-        // if (token) {
-        //   try {
-        //     user = jwt.verify(token, process.env.SECRET_KEY);
-        //   } catch (err) {
-        //     // throw new Error("Unable to verify token");
-        //     // user = null; // DO NOT throw
-        //   }
-        // }
-
-        // return { user };
         try {
           const user = jwt.verify(token, process.env.SECRET_KEY);
           return { user };
@@ -57,14 +56,7 @@ const startServer = async () => {
           return { user: null };
         }
       },
-
-    // // for testing
-    //     context: async () => {
-    //       return { user: { id: "test-user-123" } };
-    //   },
-
     });
-
 
     console.log(`🚀 Availability Service running at ${url}`);
   } catch (err) {
