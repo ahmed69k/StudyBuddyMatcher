@@ -38,7 +38,7 @@ export const connectProducer = async () => {
 export const publishDomainEvent = async (topic, eventName, payload) => {
   if (!isConnected) return;
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: "matching-service",
     correlationId: randomUUID(),
@@ -60,7 +60,7 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
   const envelope = {
-    event: "NotificationRequested",
+    eventName: "NotificationRequested",
     timestamp: new Date().toISOString(),
     producerService: "matching-service",
     correlationId: randomUUID(),
@@ -69,6 +69,22 @@ export const publishNotification = async ({ recipient, subject, message }) => {
   await producer.send({
     topic: "notifications",
     messages: [{ value: JSON.stringify(envelope) }],
+  });
+};
+
+/** Buddy-request lifecycle on topic consumed by downstream services (same topic as former buddy-request-service). */
+export const publishBuddyRequestEvent = async (eventName, payload) => {
+  if (!isConnected) return;
+  const message = {
+    eventName,
+    timestamp: new Date().toISOString(),
+    producerService: "matching-service",
+    correlationId: randomUUID(),
+    payload,
+  };
+  await producer.send({
+    topic: "buddy-request-updates",
+    messages: [{ value: JSON.stringify(message) }],
   });
 };
 

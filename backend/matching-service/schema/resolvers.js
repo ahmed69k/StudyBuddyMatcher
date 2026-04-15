@@ -1,4 +1,4 @@
-import { publishDomainEvent, publishNotification } from "../kafka/producer.js";
+import { publishDomainEvent, publishNotification, publishBuddyRequestEvent } from "../kafka/producer.js";
 
 const normalizeScore = (raw) => Math.max(0, Math.min(100, Math.round(raw)));
 
@@ -52,6 +52,13 @@ const computeCompatibility = (a, b) => {
   };
 };
 
+const minBuddyRequestCompatibility = () => {
+  const raw = process.env.BUDDY_REQUEST_MIN_COMPATIBILITY_SCORE;
+  if (raw === undefined || raw === "") return 40;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 40;
+};
+
 const assertAuthenticated = (context) => {
   if (!context?.user) throw new Error("Not authenticated");
 };
@@ -60,6 +67,14 @@ const assertSelf = (context, userId) => {
   assertAuthenticated(context);
   if (context.user.id !== userId) throw new Error("Not authorized");
 };
+
+const toIso = (d) => (d instanceof Date ? d.toISOString() : String(d));
+
+const mapBuddyRequest = (row) => ({
+  ...row,
+  createdAt: toIso(row.createdAt),
+  updatedAt: toIso(row.updatedAt),
+});
 
 const resolvers = {
   Query: {
@@ -71,7 +86,6 @@ const resolvers = {
     userProfiles: async (_, __, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
-      // Return only caller's cached profile to avoid leaking other users' data.
       const profile = await prisma.userProfile.findUnique({ where: { userId: context.user.id } });
       return profile ? [profile] : [];
     },
@@ -93,14 +107,12 @@ const resolvers = {
 
       if (top.length > 0) {
         const best = top[0];
-        // Domain event (for future consumers, even if none exist today)
         await publishDomainEvent("matching-events", "MatchIdentified", {
           userId,
           matchedUserId: best.profile.userId,
           compatibilityScore: best.compatibilityScore,
           reasons: best.reasons,
         });
-        // Align with existing notification-service consumer (flat message)
         await publishNotification({
           recipient: userId,
           subject: "New study buddy match found",
@@ -109,6 +121,39 @@ const resolvers = {
       }
 
       return top;
+    },
+    buddyRequest: async (_, { id }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const row = await prisma.buddyRequest.findUnique({ where: { id } });
+      if (!row) return null;
+      const uid = context.user.id;
+      if (row.requesterId !== uid && row.receiverId !== uid) {
+        throw new Error("Not authorized");
+      }
+      return mapBuddyRequest(row);
+    },
+    myIncomingBuddyRequests: async (_, { status }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const where = { receiverId: context.user.id };
+      if (status) where.status = status;
+      const rows = await prisma.buddyRequest.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map(mapBuddyRequest);
+    },
+    myOutgoingBuddyRequests: async (_, { status }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const where = { requesterId: context.user.id };
+      if (status) where.status = status;
+      const rows = await prisma.buddyRequest.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map(mapBuddyRequest);
     },
   },
   Mutation: {
@@ -149,6 +194,135 @@ const resolvers = {
       assertSelf(context, userId);
       const deleted = await prisma.userProfile.deleteMany({ where: { userId } });
       return deleted.count > 0;
+    },
+    sendBuddyRequest: async (_, { input }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const requesterId = context.user.id;
+      const { receiverId, message } = input;
+
+      if (receiverId === requesterId) {
+        throw new Error("Cannot send a buddy request to yourself");
+      }
+
+      const requesterProfile = await prisma.userProfile.findUnique({ where: { userId: requesterId } });
+      const receiverProfile = await prisma.userProfile.findUnique({ where: { userId: receiverId } });
+      if (!requesterProfile || !receiverProfile) {
+        throw new Error("Both users need a stored profile before sending a buddy request");
+      }
+
+      const minScore = minBuddyRequestCompatibility();
+      if (minScore > 0) {
+        const { compatibilityScore } = computeCompatibility(requesterProfile, receiverProfile);
+        if (compatibilityScore < minScore) {
+          throw new Error(
+            `Match compatibility (${compatibilityScore}) is below the minimum (${minScore}) required to send a buddy request. Try BUDDY_REQUEST_MIN_COMPATIBILITY_SCORE=0 to disable this check in development.`
+          );
+        }
+      }
+
+      const pendingSameDirection = await prisma.buddyRequest.findFirst({
+        where: {
+          requesterId,
+          receiverId,
+          status: "PENDING",
+        },
+      });
+      if (pendingSameDirection) {
+        throw new Error("You already have a pending request to this user");
+      }
+
+      const created = await prisma.buddyRequest.create({
+        data: {
+          requesterId,
+          receiverId,
+          message: message ?? null,
+        },
+      });
+
+      await publishBuddyRequestEvent("BuddyRequestCreated", {
+        id: created.id,
+        requesterId,
+        receiverId,
+        status: created.status,
+      });
+
+      await publishNotification({
+        recipient: receiverId,
+        subject: "New buddy request",
+        message: `User ${requesterId} sent you a study buddy request.`,
+      });
+
+      return mapBuddyRequest(created);
+    },
+    respondToBuddyRequest: async (_, { requestId, decision }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const uid = context.user.id;
+      const row = await prisma.buddyRequest.findUnique({ where: { id: requestId } });
+      if (!row) throw new Error("Buddy request not found");
+      if (row.receiverId !== uid) throw new Error("Only the receiver can respond");
+      if (row.status !== "PENDING") throw new Error("This request is no longer pending");
+
+      const nextStatus = decision === "ACCEPT" ? "ACCEPTED" : "DECLINED";
+      const updated = await prisma.buddyRequest.update({
+        where: { id: requestId },
+        data: { status: nextStatus },
+      });
+
+      const eventName =
+        nextStatus === "ACCEPTED" ? "BuddyRequestAccepted" : "BuddyRequestDeclined";
+      await publishBuddyRequestEvent(eventName, {
+        id: updated.id,
+        requesterId: updated.requesterId,
+        receiverId: updated.receiverId,
+        status: updated.status,
+      });
+
+      if (nextStatus === "ACCEPTED") {
+        await publishNotification({
+          recipient: updated.requesterId,
+          subject: "Buddy request accepted",
+          message: `User ${updated.receiverId} accepted your study buddy request.`,
+        });
+      } else {
+        await publishNotification({
+          recipient: updated.requesterId,
+          subject: "Buddy request declined",
+          message: `User ${updated.receiverId} declined your study buddy request.`,
+        });
+      }
+
+      return mapBuddyRequest(updated);
+    },
+    cancelBuddyRequest: async (_, { requestId }, context) => {
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const uid = context.user.id;
+      const row = await prisma.buddyRequest.findUnique({ where: { id: requestId } });
+      if (!row) throw new Error("Buddy request not found");
+      if (row.requesterId !== uid) throw new Error("Only the requester can cancel");
+      if (row.status !== "PENDING") throw new Error("Only pending requests can be cancelled");
+
+      const updated = await prisma.buddyRequest.update({
+        where: { id: requestId },
+        data: { status: "CANCELLED" },
+      });
+
+      await publishBuddyRequestEvent("BuddyRequestCancelled", {
+        id: updated.id,
+        requesterId: updated.requesterId,
+        receiverId: updated.receiverId,
+        status: updated.status,
+      });
+
+      await publishNotification({
+        recipient: updated.receiverId,
+        subject: "Buddy request withdrawn",
+        message: `User ${updated.requesterId} cancelled their study buddy request.`,
+      });
+
+      return mapBuddyRequest(updated);
     },
   },
 };

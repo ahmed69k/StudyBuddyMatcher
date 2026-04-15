@@ -38,7 +38,7 @@ export const connectProducer = async () => {
 export const publishDomainEvent = async (topic, eventName, payload) => {
   if (!isConnected) return;
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: "study-session-scheduling-service",
     correlationId: randomUUID(),
@@ -49,6 +49,17 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
     topic,
     messages: [{ value: JSON.stringify(message) }],
   });
+
+  const sessionId = payload?.sessionId;
+  const extra =
+    sessionId != null
+      ? ` sessionId=${sessionId}`
+      : payload?.userId != null
+        ? ` userId=${payload.userId}`
+        : "";
+  console.log(
+    `[study-session-scheduling-service] Kafka published ${eventName} topic=${topic}${extra}`
+  );
 };
 
 // ORIGINAL:
@@ -60,7 +71,7 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
   const envelope = {
-    event: "NotificationRequested",
+    eventName: "NotificationRequested",
     timestamp: new Date().toISOString(),
     producerService: "study-session-scheduling-service",
     correlationId: randomUUID(),
@@ -70,5 +81,9 @@ export const publishNotification = async ({ recipient, subject, message }) => {
     topic: "notifications",
     messages: [{ value: JSON.stringify(envelope) }],
   });
+
+  console.log(
+    `[study-session-scheduling-service] Kafka published NotificationRequested topic=notifications recipient=${recipient}`
+  );
 };
 
