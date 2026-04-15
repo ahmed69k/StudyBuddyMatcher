@@ -38,7 +38,7 @@ export const connectProducer = async () => {
 export const publishDomainEvent = async (topic, eventName, payload) => {
   if (!isConnected) return;
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: "matching-service",
     correlationId: randomUUID(),
@@ -60,7 +60,7 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
   const envelope = {
-    event: "NotificationRequested",
+    eventName: "NotificationRequested",
     timestamp: new Date().toISOString(),
     producerService: "matching-service",
     correlationId: randomUUID(),
@@ -76,7 +76,7 @@ export const publishNotification = async ({ recipient, subject, message }) => {
 export const publishBuddyRequestEvent = async (eventName, payload) => {
   if (!isConnected) return;
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: "matching-service",
     correlationId: randomUUID(),
