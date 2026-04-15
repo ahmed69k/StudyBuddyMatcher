@@ -72,3 +72,19 @@ export const publishNotification = async ({ recipient, subject, message }) => {
   });
 };
 
+/** Buddy-request lifecycle on topic consumed by downstream services (same topic as former buddy-request-service). */
+export const publishBuddyRequestEvent = async (eventName, payload) => {
+  if (!isConnected) return;
+  const message = {
+    event: eventName,
+    timestamp: new Date().toISOString(),
+    producerService: "matching-service",
+    correlationId: randomUUID(),
+    payload,
+  };
+  await producer.send({
+    topic: "buddy-request-updates",
+    messages: [{ value: JSON.stringify(message) }],
+  });
+};
+
