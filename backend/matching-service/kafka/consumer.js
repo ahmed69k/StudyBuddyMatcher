@@ -1,5 +1,6 @@
 import { Kafka } from "kafkajs";
 import "dotenv/config";
+import { publishTopMatchAfterDataChange } from "../schema/resolvers.js";
 
 const kafka = new Kafka({
   clientId: "matching-service",
@@ -128,6 +129,11 @@ export const startConsumer = async (prisma) => {
           console.log(
             `[matching-service] Kafka handled UserPreferencesUpdated topic=${topic} userId=${userId}`
           );
+          try {
+            await publishTopMatchAfterDataChange(prisma, userId);
+          } catch (err) {
+            console.warn("[matching-service] publishTopMatchAfterDataChange:", err?.message || err);
+          }
           return;
         }
 
@@ -160,6 +166,11 @@ export const startConsumer = async (prisma) => {
             console.log(
               `[matching-service] Kafka handled ${env.eventName} topic=${topic} userId=${userId} slot=${slotStr}`
             );
+            try {
+              await publishTopMatchAfterDataChange(prisma, userId);
+            } catch (err) {
+              console.warn("[matching-service] publishTopMatchAfterDataChange:", err?.message || err);
+            }
             return;
           }
 
@@ -173,6 +184,11 @@ export const startConsumer = async (prisma) => {
             console.log(
               `[matching-service] Kafka handled ${env.eventName} topic=${topic} userId=${userId} slot=${slotStr}`
             );
+            try {
+              await publishTopMatchAfterDataChange(prisma, userId);
+            } catch (err) {
+              console.warn("[matching-service] publishTopMatchAfterDataChange:", err?.message || err);
+            }
             return;
           }
         }
