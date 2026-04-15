@@ -36,11 +36,18 @@ export const connectProducer = async () => {
 
 export const publishEvent = async (eventName, payload) => {
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: 'profile-and-study-preferences-service',
     correlationId: randomUUID(),
-    payload,
+    payload:
+      eventName === 'UserPreferencesUpdated'
+        ? {
+            recipient: payload.userId,
+            subject: 'Your profile and study preferences were updated',
+            message: 'Your updated profile and study preference information has been saved.',
+          }
+        : payload,
   };
 
   // ORIGINAL:
@@ -54,5 +61,5 @@ export const publishEvent = async (eventName, payload) => {
     messages: [{ value: JSON.stringify(message) }],
   });
 
-  console.log(`Event published: ${eventName}`);
+  console.log(`Event published to notifications: ${eventName}`);
 };
