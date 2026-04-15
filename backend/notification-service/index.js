@@ -40,4 +40,3 @@ const { url } = await startStandaloneServer(server, {
   },
 });
 console.log(`Notification Service is ready at ${url}`)
-

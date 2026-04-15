@@ -20,6 +20,30 @@ const buildSessionUpdateData = (input) => {
   return data;
 };
 
+/** Older rows may lack a participant row for the creator; join flow must include them in the list. */
+const ensureCreatorIsParticipant = async (prisma, session) => {
+  if (!session) return session;
+  const hasCreator = session.participants.some((p) => p.userId === session.creatorId);
+  if (hasCreator) return session;
+  await prisma.sessionParticipant.create({
+    data: { sessionId: session.id, userId: session.creatorId },
+  });
+  return prisma.studySession.findUnique({
+    where: { id: session.id },
+    include: { participants: true },
+  });
+};
+
+const withParticipantsCreatorFirst = (session) => {
+  if (!session?.participants?.length) return session;
+  const participants = [...session.participants].sort((a, b) => {
+    if (a.userId === session.creatorId) return -1;
+    if (b.userId === session.creatorId) return 1;
+    return 0;
+  });
+  return { ...session, participants };
+};
+
 const resolvers = {
   Query: {
     session: async (_, { id }, context) => {
@@ -33,13 +57,14 @@ const resolvers = {
       const isCreator = session.creatorId === context.user.id;
       const isParticipant = session.participants.some((p) => p.userId === context.user.id);
       if (!isCreator && !isParticipant) throw new Error("Not authorized");
-      return session;
+      const normalized = await ensureCreatorIsParticipant(prisma, session);
+      return withParticipantsCreatorFirst(normalized);
     },
     sessions: async (_, __, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
       // Return only sessions related to the caller (creator or participant)
-      return prisma.studySession.findMany({
+      const list = await prisma.studySession.findMany({
         where: {
           OR: [
             { creatorId: context.user.id },
@@ -49,6 +74,12 @@ const resolvers = {
         include: { participants: true },
         orderBy: { dateTime: "asc" },
       });
+      const out = [];
+      for (const s of list) {
+        const normalized = await ensureCreatorIsParticipant(prisma, s);
+        out.push(withParticipantsCreatorFirst(normalized));
+      }
+      return out;
     },
     sessionsByUser: async (_, { userId }, context) => {
       const { prisma } = context;
@@ -69,7 +100,13 @@ const resolvers = {
         include: { participants: true },
       });
 
-      return [...created, ...joined];
+      const combined = [...created, ...joined];
+      const out = [];
+      for (const s of combined) {
+        const normalized = await ensureCreatorIsParticipant(prisma, s);
+        out.push(withParticipantsCreatorFirst(normalized));
+      }
+      return out;
     },
   },
   Mutation: {
@@ -107,7 +144,7 @@ const resolvers = {
         message: `Your session "${session.topic}" was created successfully.`,
       });
 
-      return session;
+      return withParticipantsCreatorFirst(session);
     },
     updateSession: async (_, { sessionId, input }, context) => {
       const { prisma } = context;
@@ -116,6 +153,9 @@ const resolvers = {
       const updateData = buildSessionUpdateData(input);
       if (Object.keys(updateData).length === 0) {
         throw new Error("At least one field must be provided to update the session");
+      }
+      if (updateData.dateTime !== undefined) {
+        updateData.upcomingReminderSentAt = null;
       }
 
       const existing = await prisma.studySession.findUnique({
@@ -155,40 +195,50 @@ const resolvers = {
         });
       }
 
-      return session;
+      const normalizedUpdate = await ensureCreatorIsParticipant(prisma, session);
+      return withParticipantsCreatorFirst(normalizedUpdate);
     },
     joinSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
+
+      let sessionForJoin = await prisma.studySession.findUnique({
+        where: { id: sessionId },
+        include: { participants: true },
+      });
+      if (!sessionForJoin) throw new Error("Session not found");
+      sessionForJoin = await ensureCreatorIsParticipant(prisma, sessionForJoin);
+      if (!sessionForJoin) throw new Error("Session not found");
+
+      if (sessionForJoin.creatorId === userId) {
+        throw new Error("You are already in this session as the creator.");
+      }
+
       const existing = await prisma.sessionParticipant.findUnique({
         where: { sessionId_userId: { sessionId, userId } },
       });
       if (existing) {
-        const session = await prisma.studySession.findUnique({
-          where: { id: sessionId },
-          include: { participants: true },
-        });
-        return session;
+        return withParticipantsCreatorFirst(sessionForJoin);
       }
       await prisma.sessionParticipant.create({ data: { sessionId, userId } });
       const session = await prisma.studySession.findUnique({ where: { id: sessionId }, include: { participants: true } });
+      if (!session) throw new Error("Session not found");
 
-      if (session) {
-        await publishDomainEvent("study-session-events", "StudySessionJoined", {
-          sessionId,
-          userId,
-          creatorId: session.creatorId,
-          topic: session.topic,
-        });
+      await publishDomainEvent("study-session-events", "StudySessionJoined", {
+        sessionId,
+        userId,
+        creatorId: session.creatorId,
+        topic: session.topic,
+      });
 
-        await publishNotification({
-          recipient: session.creatorId,
-          subject: "Someone joined your session",
-          message: `User ${userId} joined your session "${session.topic}".`,
-        });
-      }
+      await publishNotification({
+        recipient: session.creatorId,
+        subject: "Someone joined your session",
+        message: `User ${userId} joined your session "${session.topic}".`,
+      });
 
-      return session;
+      const normalizedJoined = await ensureCreatorIsParticipant(prisma, session);
+      return withParticipantsCreatorFirst(normalizedJoined);
     },
     leaveSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
@@ -201,7 +251,7 @@ const resolvers = {
       if (!beforeLeave) throw new Error("Session not found");
 
       await prisma.sessionParticipant.deleteMany({ where: { sessionId, userId } });
-      const session = await prisma.studySession.findUnique({ where: { id: sessionId }, include: { participants: true } });
+      let session = await prisma.studySession.findUnique({ where: { id: sessionId }, include: { participants: true } });
 
       await publishDomainEvent("study-session-events", "StudySessionLeft", {
         sessionId,
@@ -217,7 +267,8 @@ const resolvers = {
         });
       }
 
-      return session;
+      session = await ensureCreatorIsParticipant(prisma, session);
+      return withParticipantsCreatorFirst(session);
     },
     cancelSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;

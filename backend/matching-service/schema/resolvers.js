@@ -52,6 +52,37 @@ const computeCompatibility = (a, b) => {
   };
 };
 
+/** Called from kafka/consumer.js after profile or availability updates (not from GraphQL reads). */
+export async function publishTopMatchAfterDataChange(prisma, userId) {
+  const source = await prisma.userProfile.findUnique({ where: { userId } });
+  if (!source) return;
+
+  const allProfiles = await prisma.userProfile.findMany({
+    where: { userId: { not: userId } },
+  });
+  if (allProfiles.length === 0) return;
+
+  const scored = allProfiles
+    .map((profile) => {
+      const { compatibilityScore, reasons } = computeCompatibility(source, profile);
+      return { profile, compatibilityScore, reasons };
+    })
+    .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+
+  const best = scored[0];
+  await publishDomainEvent("matching-events", "MatchIdentified", {
+    userId,
+    matchedUserId: best.profile.userId,
+    compatibilityScore: best.compatibilityScore,
+    reasons: best.reasons,
+  });
+  await publishNotification({
+    recipient: userId,
+    subject: "New study buddy match found",
+    message: `Top match: ${best.profile.name} (score ${best.compatibilityScore}).`,
+  });
+}
+
 const minBuddyRequestCompatibility = () => {
   const raw = process.env.BUDDY_REQUEST_MIN_COMPATIBILITY_SCORE;
   if (raw === undefined || raw === "") return 40;
@@ -104,22 +135,7 @@ const resolvers = {
         .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
       const top = scored.slice(0, maxResults);
-
-      if (top.length > 0) {
-        const best = top[0];
-        await publishDomainEvent("matching-events", "MatchIdentified", {
-          userId,
-          matchedUserId: best.profile.userId,
-          compatibilityScore: best.compatibilityScore,
-          reasons: best.reasons,
-        });
-        await publishNotification({
-          recipient: userId,
-          subject: "New study buddy match found",
-          message: `Top match: ${best.profile.name} (score ${best.compatibilityScore}).`,
-        });
-      }
-
+      // Reads only: Kafka MatchIdentified + notifications run from kafka/consumer.js after data changes.
       return top;
     },
     buddyRequest: async (_, { id }, context) => {
