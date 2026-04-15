@@ -116,6 +116,7 @@ services:
       - matching-service
       - availability-management-service
       - study-session-scheduling-service
+      - messaging-service
     environment:
       PORT: "4001"
       # Service hostname + container listen port (3000). Host browser: http://localhost:3007/
@@ -125,3 +126,4 @@ services:
       MATCHING_GRAPHQL_URL: http://matching-service:3003/
       AVAILABILITY_GRAPHQL_URL: http://availability-management-service:3002/
       STUDY_SESSION_GRAPHQL_URL: http://study-session-scheduling-service:3004/
+      MESSAGING_GRAPHQL_URL: http://messaging-service:8000/
