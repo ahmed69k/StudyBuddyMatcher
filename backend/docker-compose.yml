@@ -1,8 +1,12 @@
+# Kafka (KRaft — no Zookeeper), same style as the lab: apache/kafka:3.7.2
+# - 9092 -> PLAINTEXT; from other containers use bootstrap kafka:9092
+# - 9094 -> CONTROLLER (internal to the container; not published)
 services:
   kafka:
     image: apache/kafka:3.7.2
+    container_name: kafka
     ports:
-      - "9093:9092"
+      - "9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -15,10 +19,109 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-  
+
+  user-and-auth-service:
+    build: ./user-and-auth-service
+    ports:
+      # ORIGINAL: - "3000:3000"
+      # EDIT: Host 3007 avoids bind errors when something (e.g. local node) already uses 3000; in-network URL stays :3000
+      - "3007:3000"
+    env_file:
+      - ./user-and-auth-service/.env
+
+  # ORIGINAL: PROFILE SERVICE NOT LISTED IN COMPOSE
+  # EDIT: PROFILE SERVICE ADDED FOR GATEWAY / COMPOSE NETWORK
+  profile-and-study-preferences-service:
+    depends_on:
+      - kafka
+    build: ./profile-and-study-preferences-service
+    ports:
+      - "3001:3001"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      # ORIGINAL: NO PORT KEY HERE (ONLY KAFKA_BROKER)
+      # EDIT: PORT MUST MATCH APP LISTEN PORT IN CONTAINER
+      PORT: "3001"
+    env_file:
+      - ./profile-and-study-preferences-service/.env
   notification-service:
     depends_on:
       - kafka
     build: ./notification-service/
+    ports:
+      - "3005:3005"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "3005"
     env_file:
       - ./notification-service/.env
+
+  matching-service:
+    depends_on:
+      - kafka
+    build: ./matching-service
+    ports:
+      - "3003:3003"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "3003"
+    env_file:
+      - path: ./matching-service/.env
+        required: false
+
+  study-session-scheduling-service:
+    depends_on:
+      - kafka
+    build: ./study-session-scheduling-service
+    ports:
+      - "3004:3004"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "3004"
+    env_file:
+      - path: ./study-session-scheduling-service/.env
+        required: false
+
+  messaging-service:
+    build: ./messaging-service
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    env_file:
+      - ./messaging-service/.env
+
+  # ORIGINAL: AVAILABILITY SERVICE NOT LISTED IN COMPOSE
+  # EDIT: AVAILABILITY SERVICE ADDED FOR GATEWAY (PORT 3002 IN TEAM SCHEME)
+  availability-management-service:
+    depends_on:
+      - kafka
+    build: ./availability-management-service
+    ports:
+      - "3002:3002"
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PORT: "3002"
+    env_file:
+      - path: ./availability-management-service/.env
+        required: false
+
+  graphql-gateway:
+    build: ./graphql-gateway
+    ports:
+      - "4001:4001"
+    depends_on:
+      - user-and-auth-service
+      - profile-and-study-preferences-service
+      - notification-service
+      - matching-service
+      - availability-management-service
+      - study-session-scheduling-service
+    environment:
+      PORT: "4001"
+      # Service hostname + container listen port (3000). Host browser: http://localhost:3007/
+      AUTH_GRAPHQL_URL: http://user-and-auth-service:3000/
+      PROFILE_GRAPHQL_URL: http://profile-and-study-preferences-service:3001/
+      NOTIFICATION_GRAPHQL_URL: http://notification-service:3005/
+      MATCHING_GRAPHQL_URL: http://matching-service:3003/
+      AVAILABILITY_GRAPHQL_URL: http://availability-management-service:3002/
+      STUDY_SESSION_GRAPHQL_URL: http://study-session-scheduling-service:3004/

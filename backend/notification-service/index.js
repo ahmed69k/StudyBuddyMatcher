@@ -17,25 +17,27 @@ const server = new ApolloServer({
 
 });
 
-await startConsumer()
-const { url } = await startStandaloneServer(server,{
-listen: {port: 4000},
-context: ({ req }) => {
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace("Bearer ", "").trim();
+const port = Number(process.env.PORT) || 3005;
 
-  if (!token) {
-    return { user: null }; 
-  }
+await startConsumer();
+const { url } = await startStandaloneServer(server, {
+  listen: { port, host: "0.0.0.0" },
+  context: ({ req }) => {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "").trim();
 
-  try {
-    const user = jwt.verify(token, process.env.SECRET_KEY);
-    return { user };
-  } catch (err) {
-    console.warn("Invalid token:", err.message);
-    return { user: null }; 
-  }
-}
-})
-console.log(`Server is ready at ${url}`)
+    if (!token) {
+      return { user: null };
+    }
+
+    try {
+      const user = jwt.verify(token, process.env.SECRET_KEY);
+      return { user };
+    } catch (err) {
+      console.warn("Invalid token:", err.message);
+      return { user: null };
+    }
+  },
+});
+console.log(`Notification Service is ready at ${url}`)
 

@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model UserProfile {
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  name              String
+  email             String?
+  courses           String[]  @default([])
+  topics            String[]  @default([])
+  studyPace         String?
+  studyMode         String?
+  preferredGroupSize Int?
+  studyStyle        String?
+  availability      String[]  @default([])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+enum BuddyRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model BuddyRequest {
+  id          String             @id @default(uuid())
+  requesterId String
+  receiverId  String
+  status      BuddyRequestStatus @default(PENDING)
+  message     String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([requesterId])
+  @@index([receiverId])
+  @@index([receiverId, status])
+  @@index([requesterId, status])
+}

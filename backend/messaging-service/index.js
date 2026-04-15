@@ -20,6 +20,7 @@
 
   });
   const wsServer = new WebSocketServer({
+    host: "0.0.0.0",
     port: 8001,
     path: '/graphql'
   })
@@ -55,7 +56,7 @@
   })
 
   const { url } = await startStandaloneServer(server,{
-  listen: {port: 8000},
+  listen: {port: 8000, host: "0.0.0.0"},
   context: ({ req }) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "").trim();
