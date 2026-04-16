@@ -34,15 +34,48 @@ const typeDefs = `#graphql
     availability: [String!]
   }
 
+  enum BuddyRequestStatus {
+    PENDING
+    ACCEPTED
+    DECLINED
+    CANCELLED
+  }
+
+  type BuddyRequest {
+    id: ID!
+    requesterId: String!
+    receiverId: String!
+    status: BuddyRequestStatus!
+    message: String
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  input SendBuddyRequestInput {
+    receiverId: ID!
+    message: String
+  }
+
+  enum BuddyRequestDecision {
+    ACCEPT
+    DECLINE
+  }
+
   type Query {
     userProfile(userId: String!): UserProfile
     userProfiles: [UserProfile!]!
     recommendMatches(userId: String!, maxResults: Int = 10): [MatchResult!]!
+    buddyRequest(id: ID!): BuddyRequest
+    myIncomingBuddyRequests(status: BuddyRequestStatus): [BuddyRequest!]!
+    myOutgoingBuddyRequests(status: BuddyRequestStatus): [BuddyRequest!]!
   }
 
   type Mutation {
     upsertUserProfile(profile: UserProfileInput!): UserProfile!
     deleteUserProfile(userId: String!): Boolean!
+    sendBuddyRequest(input: SendBuddyRequestInput!): BuddyRequest!
+    respondToBuddyRequest(requestId: ID!, decision: BuddyRequestDecision!): BuddyRequest!
+    cancelBuddyRequest(requestId: ID!): BuddyRequest!
   }
 `;
 

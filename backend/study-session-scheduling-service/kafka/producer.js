@@ -5,9 +5,11 @@ import "dotenv/config";
 const kafka = new Kafka({
   clientId: "study-session-scheduling-service",
   brokers: [process.env.KAFKA_BROKER || "localhost:9092"],
+  // ORIGINAL: retries default 1, initialRetryTime default 100
+  // EDIT: HIGHER DEFAULT KAFKA RETRIES FOR SLOW BROKER STARTUP
   retry: {
-    retries: Number(process.env.KAFKA_RETRIES || 1),
-    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 100),
+    retries: Number(process.env.KAFKA_RETRIES || 8),
+    initialRetryTime: Number(process.env.KAFKA_RETRY_INITIAL_MS || 300),
   },
   ...(process.env.KAFKA_USERNAME && {
     sasl: {
@@ -36,7 +38,7 @@ export const connectProducer = async () => {
 export const publishDomainEvent = async (topic, eventName, payload) => {
   if (!isConnected) return;
   const message = {
-    event: eventName,
+    eventName,
     timestamp: new Date().toISOString(),
     producerService: "study-session-scheduling-service",
     correlationId: randomUUID(),
@@ -47,15 +49,41 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
     topic,
     messages: [{ value: JSON.stringify(message) }],
   });
+
+  const sessionId = payload?.sessionId;
+  const extra =
+    sessionId != null
+      ? ` sessionId=${sessionId}`
+      : payload?.userId != null
+        ? ` userId=${payload.userId}`
+        : "";
+  console.log(
+    `[study-session-scheduling-service] Kafka published ${eventName} topic=${topic}${extra}`
+  );
 };
 
-// Align with existing notification-service consumer which expects:
-// { recipient, subject, message } (flat, no envelope)
+// ORIGINAL:
+// await producer.send({
+//   topic: "notifications",
+//   messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
+// });
+/** EDIT: enveloped NotificationRequested for notification-service. */
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
+  const envelope = {
+    eventName: "NotificationRequested",
+    timestamp: new Date().toISOString(),
+    producerService: "study-session-scheduling-service",
+    correlationId: randomUUID(),
+    payload: { recipient, subject, message },
+  };
   await producer.send({
     topic: "notifications",
-    messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
+    messages: [{ value: JSON.stringify(envelope) }],
   });
+
+  console.log(
+    `[study-session-scheduling-service] Kafka published NotificationRequested topic=notifications recipient=${recipient}`
+  );
 };
 

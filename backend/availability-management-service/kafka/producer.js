@@ -4,18 +4,21 @@ import 'dotenv/config';
 
 const kafka = new Kafka({
   clientId: 'availability-management-service',
-  // Uses 29092 for local testing outside of Docker
-  brokers: [process.env.KAFKA_BROKER || 'localhost:29092'],
+  // ORIGINAL: brokers: [process.env.KAFKA_BROKER || 'localhost:29092'], // local lab port
+  // EDIT: align default with other services / Docker (9092)
+  brokers: [process.env.KAFKA_BROKER || 'localhost:9092'],
 });
 
 const producer = kafka.producer();
 
+let connectLogged = false;
+
 export const connectProducer = async () => {
-  try {
-    await producer.connect();
-    console.log('✅ Kafka Producer connected');
-  } catch (error) {
-    console.error('❌ Kafka connection error:', error);
+  // Idempotent: safe to call from startup and before each publish.
+  await producer.connect();
+  if (!connectLogged) {
+    console.log("✅ Kafka Producer connected (availability-management-service)");
+    connectLogged = true;
   }
 };
 
@@ -23,18 +26,20 @@ export const publishEvent = async (eventName, payload) => {
   const message = {
     event: eventName,
     timestamp: new Date().toISOString(),
-    producerService: 'availability-management-service',
+    producerService: "availability-management-service",
     correlationId: randomUUID(),
     payload,
   };
 
   try {
+    // ORIGINAL: send without awaiting connect — races with non-blocking connectProducer() in index.js → "producer is disconnected".
+    await connectProducer();
     await producer.send({
-      topic: 'availability-updates',
+      topic: "availability-updates",
       messages: [{ value: JSON.stringify(message) }],
     });
     console.log(`📡 Event published: ${eventName}`);
   } catch (error) {
-    console.error('❌ Kafka publish error:', error);
+    console.error("❌ Kafka publish error:", error);
   }
 };
