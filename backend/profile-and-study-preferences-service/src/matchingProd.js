@@ -6,11 +6,16 @@ const envPath = new URL('../.env', import.meta.url).pathname;
 dotenv.config({ path: envPath });
 
 const kafkaBrokers = process.env.KAFKA_BROKER
-  ? process.env.KAFKA_BROKER.split(',').map((broker) => broker.trim()).filter(Boolean)
+  ? process.env.KAFKA_BROKER
+      .split(',')
+      .map((broker) => broker.trim())
+      .filter(Boolean)
   : [];
 
 if (!kafkaBrokers.length) {
-  throw new Error('KAFKA_BROKER must be defined and contain at least one broker host:port');
+  throw new Error(
+    'KAFKA_BROKER must be defined and contain at least one broker host:port'
+  );
 }
 
 const kafka = new Kafka({
@@ -28,10 +33,20 @@ const kafka = new Kafka({
 
 const producer = kafka.producer();
 
+let isConnected = false;
+
 export const connectProducer = async () => {
-  await producer.connect();
-  console.log('Kafka producer connected');
+  if (!isConnected) {
+    await producer.connect();
+    isConnected = true;
+    console.log('Kafka producer connected');
+  }
 };
+
+producer.on(producer.events.DISCONNECT, () => {
+  isConnected = false;
+  console.log('Kafka producer disconnected');
+});
 
 export const publishEvent = async (eventName, payload) => {
   const message = {
@@ -42,10 +57,27 @@ export const publishEvent = async (eventName, payload) => {
     payload,
   };
 
-  await producer.send({
-    topic: 'user-preferences-updated',
-    messages: [{ value: JSON.stringify(message) }],
-  });
+  try {
+    if (!isConnected) {
+      await connectProducer();
+    }
 
-  console.log(`Event published: ${eventName}`);
+    await producer.send({
+      topic: 'user-preferences-updated',
+      messages: [{ value: JSON.stringify(message) }],
+    });
+
+    console.log(`Event published: ${eventName}`);
+  } catch (err) {
+    isConnected = false;
+
+    await connectProducer();
+
+    await producer.send({
+      topic: 'user-preferences-updated',
+      messages: [{ value: JSON.stringify(message) }],
+    });
+
+    console.log(`Event published after reconnect: ${eventName}`);
+  }
 };
