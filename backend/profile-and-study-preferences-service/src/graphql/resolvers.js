@@ -41,6 +41,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: context.user.userName,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -71,6 +73,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: context.user.userName,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -102,6 +106,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: context.user.userName,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -132,6 +138,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: context.user.userName,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -165,6 +173,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: context.user.userName,
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
