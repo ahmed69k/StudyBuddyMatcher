@@ -67,7 +67,11 @@ export async function publishTopMatchAfterDataChange(prisma, userId) {
       const { compatibilityScore, reasons } = computeCompatibility(source, profile);
       return { profile, compatibilityScore, reasons };
     })
-    .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+    .sort((a, b) => {
+      const d = b.compatibilityScore - a.compatibilityScore;
+      if (d !== 0) return d;
+      return String(a.profile.userId).localeCompare(String(b.profile.userId));
+    });
 
   const best = scored[0];
   await publishDomainEvent("matching-events", "MatchIdentified", {
@@ -132,7 +136,11 @@ const resolvers = {
           const { compatibilityScore, reasons } = computeCompatibility(source, profile);
           return { profile, compatibilityScore, reasons };
         })
-        .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+        .sort((a, b) => {
+          const d = b.compatibilityScore - a.compatibilityScore;
+          if (d !== 0) return d;
+          return String(a.profile.userId).localeCompare(String(b.profile.userId));
+        });
 
       const top = scored.slice(0, maxResults);
       // Reads only: Kafka MatchIdentified + notifications run from kafka/consumer.js after data changes.
@@ -175,32 +183,64 @@ const resolvers = {
   Mutation: {
     upsertUserProfile: async (_, { profile }, context) => {
       const { prisma } = context;
-      const { userId, name, email, courses = [], topics = [], studyPace, studyMode, preferredGroupSize, studyStyle, availability = [] } = profile;
+      const { userId } = profile;
       assertSelf(context, userId);
+
+      const existing = await prisma.userProfile.findUnique({ where: { userId } });
+
+      /**
+       * Merge PATCH semantics: only fields present in `profile` replace stored values;
+       * omitted optional fields keep whatever is already in matching DB (or sensible defaults on first create).
+       */
+      const mergedName =
+        profile.name !== undefined && profile.name !== ""
+          ? profile.name
+          : existing?.name ?? "Unknown";
+      const mergedEmail =
+        profile.email !== undefined ? profile.email : existing?.email ?? null;
+      const mergedCourses =
+        profile.courses !== undefined ? profile.courses : existing?.courses ?? [];
+      const mergedTopics =
+        profile.topics !== undefined ? profile.topics : existing?.topics ?? [];
+      const mergedStudyPace =
+        profile.studyPace !== undefined ? profile.studyPace : existing?.studyPace ?? null;
+      const mergedStudyMode =
+        profile.studyMode !== undefined ? profile.studyMode : existing?.studyMode ?? null;
+      const mergedPreferredGroupSize =
+        profile.preferredGroupSize !== undefined
+          ? profile.preferredGroupSize
+          : existing?.preferredGroupSize ?? null;
+      const mergedStudyStyle =
+        profile.studyStyle !== undefined ? profile.studyStyle : existing?.studyStyle ?? null;
+      const mergedAvailability =
+        profile.availability !== undefined
+          ? profile.availability
+          : existing?.availability ?? [];
+
       const upserted = await prisma.userProfile.upsert({
         where: { userId },
         create: {
           userId,
-          name,
-          email,
-          courses,
-          topics,
-          studyPace,
-          studyMode,
-          preferredGroupSize,
-          studyStyle,
-          availability,
+          name: mergedName,
+          email: mergedEmail,
+          courses: mergedCourses,
+          topics: mergedTopics,
+          studyPace: mergedStudyPace,
+          studyMode: mergedStudyMode,
+          preferredGroupSize: mergedPreferredGroupSize,
+          studyStyle: mergedStudyStyle,
+          availability: mergedAvailability,
         },
         update: {
-          name,
-          email,
-          courses,
-          topics,
-          studyPace,
-          studyMode,
-          preferredGroupSize,
-          studyStyle,
-          availability,
+          name: mergedName,
+          email: mergedEmail,
+          courses: mergedCourses,
+          topics: mergedTopics,
+          studyPace: mergedStudyPace,
+          studyMode: mergedStudyMode,
+          preferredGroupSize: mergedPreferredGroupSize,
+          studyStyle: mergedStudyStyle,
+          availability: mergedAvailability,
         },
       });
       return upserted;

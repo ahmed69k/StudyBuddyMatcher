@@ -1,6 +1,10 @@
 import { publishEvent } from '../matchingProd.js';
 import { prisma } from '../prismaClient.js';
 
+/** Maps JWT claims to the name published for matching (username claim after login includes `username`). */
+const displayNameFromUser = (user) =>
+  user?.userName ?? user?.username ?? user?.name ?? undefined;
+
 export const resolvers = {
   Query: {
     getProfile: async (_, __, context) => {
@@ -41,6 +45,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: displayNameFromUser(context.user),
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -71,6 +77,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: displayNameFromUser(context.user),
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -102,6 +110,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: displayNameFromUser(context.user),
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -132,6 +142,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: displayNameFromUser(context.user),
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,
@@ -165,6 +177,8 @@ export const resolvers = {
 
       await publishEvent('UserPreferencesUpdated', {
         userId: context.user.id,
+        userEmail: context.user.email,
+        userName: displayNameFromUser(context.user),
         courses: fullProfile.courses.map((c) => c.name),
         topics: fullProfile.topics.map((t) => t.name),
         studyPreference: fullProfile.studyPreference,

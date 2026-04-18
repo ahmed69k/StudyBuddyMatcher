@@ -50,8 +50,6 @@ export const publishEvent = async (eventName, payload) => {
         : payload,
   };
 
-  
-
   // ORIGINAL:
   // await producer.send({
   //   topic: 'user-events',
