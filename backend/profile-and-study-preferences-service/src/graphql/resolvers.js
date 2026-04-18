@@ -1,5 +1,5 @@
+import { publishEvent } from '../matchingProd.js';
 import { prisma } from '../prismaClient.js';
-import { publishEvent } from '../kafka.js';
 
 export const resolvers = {
   Query: {

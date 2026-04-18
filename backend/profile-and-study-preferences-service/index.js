@@ -21,6 +21,10 @@ const port = Number(process.env.PORT) || 3001;
 // EDIT: TRIM JWT SECRET FROM .ENV
 const jwtSecret = process.env.SECRET_KEY?.trim();
 
+connectProducer().catch((err) =>
+  console.warn('⚠️ Kafka producer (profile-and-study-preferences-service):', err?.message || err)
+);
+
 const { url } = await startStandaloneServer(server, {
   // EDIT: 0.0.0.0 FOR DOCKER; PORT FROM ENV ABOVE
   listen: { port, host: '0.0.0.0' },
@@ -46,10 +50,6 @@ const { url } = await startStandaloneServer(server, {
   },
 });
 
-// ORIGINAL: await connectProducer();
-// EDIT: KAFKA NON-BLOCKING AFTER HTTP IS UP
-connectProducer().catch((err) =>
-  console.warn('⚠️ Kafka producer (profile-and-study-preferences-service):', err?.message || err)
-);
+
 
 console.log(`Profile service running at ${url}`);
