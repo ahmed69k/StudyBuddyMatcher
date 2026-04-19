@@ -34,8 +34,12 @@ const kafka = new Kafka({
 const groupId = process.env.KAFKA_GROUP_ID || "matching-group";
 const consumer = kafka.consumer({ groupId });
 
+/** Delay between Kafka subscribe retries when the broker is not ready yet. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Parses Kafka message JSON into `{ eventName, payload }`; supports legacy producers that used `event` instead of `eventName`.
+ */
 const getEnvelope = (raw) => {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
@@ -48,6 +52,9 @@ const getEnvelope = (raw) => {
   return { eventName: null, payload: parsed };
 };
 
+/**
+ * Normalizes availability slot objects from different producers into one string key stored in `UserProfile.availability`.
+ */
 const availabilitySlotToString = (slot) => {
   const day = slot.dayOfWeek ?? slot.day ?? slot.weekday;
   const start = slot.startHour ?? slot.start ?? slot.from;
@@ -56,7 +63,11 @@ const availabilitySlotToString = (slot) => {
   return `${day} ${start}-${end}`;
 };
 
-/** Profile service may publish UserPreferencesUpdated on `notifications` or legacy topic `user-preferences-updated`. */
+/**
+ * Applies `UserPreferencesUpdated` from the profile service: upserts matching `UserProfile` (courses, topics, study prefs, identity),
+ * then triggers optional “top match” notification via `publishTopMatchAfterDataChange`.
+ * Returns true if this message was handled (caller should skip further processing).
+ */
 async function handleUserPreferencesUpdated(prisma, topic, env) {
   if (env.eventName !== "UserPreferencesUpdated") return false;
 
@@ -125,6 +136,10 @@ async function handleUserPreferencesUpdated(prisma, topic, env) {
   return true;
 }
 
+/**
+ * Subscribes to profile and availability Kafka topics and keeps `UserProfile` in sync; after updates, may emit match notifications.
+ * Safe no-op if Kafka is unreachable (logs warning, HTTP API still works).
+ */
 export const startConsumer = async (prisma) => {
   try {
     await consumer.connect();
@@ -165,6 +180,7 @@ export const startConsumer = async (prisma) => {
 
   try {
     await consumer.run({
+      // Per-message router: sync preferences from profile topics, or merge/delete availability slots and refresh top-match hints.
       eachMessage: async ({ topic, message }) => {
         const raw = message.value?.toString();
         const env = getEnvelope(raw);

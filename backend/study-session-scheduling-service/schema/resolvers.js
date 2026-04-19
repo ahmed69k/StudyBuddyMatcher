@@ -1,14 +1,17 @@
 import { publishDomainEvent, publishNotification } from "../kafka/producer.js";
 
+/** Requires a logged-in user (`context.user` from JWT); throws otherwise. */
 const assertAuthenticated = (context) => {
   if (!context?.user) throw new Error("Not authenticated");
 };
 
+/** Ensures the operation targets the same `userId` as the JWT (no cross-user join/leave on GraphQL). */
 const assertSelf = (context, userId) => {
   assertAuthenticated(context);
   if (context.user.id !== userId) throw new Error("Not authorized");
 };
 
+/** Maps partial `UpdateSessionInput` to a Prisma `data` object; only set fields are updated. */
 const buildSessionUpdateData = (input) => {
   const data = {};
   if (input.topic !== undefined && input.topic !== null) data.topic = input.topic;
@@ -20,7 +23,9 @@ const buildSessionUpdateData = (input) => {
   return data;
 };
 
-/** Older rows may lack a participant row for the creator; join flow must include them in the list. */
+/**
+ * If legacy data has no `SessionParticipant` for the host, creates it so participant lists are always consistent.
+ */
 const ensureCreatorIsParticipant = async (prisma, session) => {
   if (!session) return session;
   const hasCreator = session.participants.some((p) => p.userId === session.creatorId);
@@ -34,6 +39,7 @@ const ensureCreatorIsParticipant = async (prisma, session) => {
   });
 };
 
+/** Puts the session host first in the `participants` array for stable UI ordering. */
 const withParticipantsCreatorFirst = (session) => {
   if (!session?.participants?.length) return session;
   const participants = [...session.participants].sort((a, b) => {
@@ -46,6 +52,7 @@ const withParticipantsCreatorFirst = (session) => {
 
 const resolvers = {
   Query: {
+    /** Returns one session if the caller is host or participant; normalizes creator-as-participant. */
     session: async (_, { id }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -60,6 +67,7 @@ const resolvers = {
       const normalized = await ensureCreatorIsParticipant(prisma, session);
       return withParticipantsCreatorFirst(normalized);
     },
+    /** All sessions the current user created or joined, ordered by start time. */
     sessions: async (_, __, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -81,6 +89,9 @@ const resolvers = {
       }
       return out;
     },
+    /**
+     * Splits “my created” vs “my joined (other people’s)” sessions for dashboard-style UIs; `userId` must be the caller.
+     */
     sessionsByUser: async (_, { userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
@@ -110,6 +121,9 @@ const resolvers = {
     },
   },
   Mutation: {
+    /**
+     * Persists a new `StudySession`, adds the creator as first participant, emits `StudySessionCreated` + notification.
+     */
     createSession: async (_, { input }, context) => {
       const { prisma } = context;
       assertSelf(context, input.creatorId);
@@ -146,6 +160,9 @@ const resolvers = {
 
       return withParticipantsCreatorFirst(session);
     },
+    /**
+     * Host-only PATCH update; resetting `dateTime` clears reminder state so reminders can fire again for the new time.
+     */
     updateSession: async (_, { sessionId, input }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -198,6 +215,7 @@ const resolvers = {
       const normalizedUpdate = await ensureCreatorIsParticipant(prisma, session);
       return withParticipantsCreatorFirst(normalizedUpdate);
     },
+    /** Adds a participant row if absent; notifies host via Kafka (`StudySessionJoined`). */
     joinSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
@@ -240,6 +258,7 @@ const resolvers = {
       const normalizedJoined = await ensureCreatorIsParticipant(prisma, session);
       return withParticipantsCreatorFirst(normalizedJoined);
     },
+    /** Removes participant; notifies host unless the leaver was the creator (still listed as host via ensure helper). */
     leaveSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
@@ -270,6 +289,7 @@ const resolvers = {
       session = await ensureCreatorIsParticipant(prisma, session);
       return withParticipantsCreatorFirst(session);
     },
+    /** Host deletes the session and all participants; fans out cancellation notifications to joiners. */
     cancelSession: async (_, { sessionId, userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
