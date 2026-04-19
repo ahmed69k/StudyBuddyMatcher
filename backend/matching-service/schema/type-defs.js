@@ -24,8 +24,8 @@ const typeDefs = `#graphql
 
   input UserProfileInput {
     userId: String!
-    """Omit on update to keep the stored value; required for a brand-new row unless you accept the default name."""
-    name: String
+    name: String!
+    email: String
     courses: [String!]
     topics: [String!]
     studyPace: String

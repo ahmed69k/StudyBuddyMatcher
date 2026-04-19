@@ -1,13 +1,3 @@
-/**
- * Everything that writes matching.UserProfile:
- *
- * 1) GraphQL upsertUserProfile — manual PATCH-merge (see resolvers): omitted fields keep DB values.
- * 2) Kafka UserPreferencesUpdated (from profile service) — syncs courses, topics, study prefs; when payload
- *    includes name/email (or userName/userEmail from profile service) they are applied on create and update
- *    (omitted keys keep existing name/email on update).
- * 3) Kafka AvailabilityCreated | Updated | Deleted (topic availability-updates) — merges slot strings into
- *    availability[]; may create a stub row (name "Unknown") if none exists yet.
- */
 import { Kafka } from "kafkajs";
 import "dotenv/config";
 import { publishTopMatchAfterDataChange } from "../schema/resolvers.js";
@@ -148,16 +138,9 @@ export const startConsumer = async (prisma) => {
     return;
   }
 
-  // Profile: UserPreferencesUpdated — topic may be "notifications" and/or "user-preferences-updated" (legacy producers).
-  // Availability: AvailabilityCreated | Updated | Deleted on "availability-updates".
-  // ORIGINAL subscribe (single try, no retry/backoff):
-  // try {
-  //   await consumer.subscribe({ topic: "notifications" });
-  //   await consumer.subscribe({ topic: "availability-updates" });
-  // } catch (err) {
-  //   console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", err?.message || err);
-  //   return;
-  // }
+  // notifications: UserPreferencesUpdated (optional) + NotificationRequested (notification-service only).
+  // user-preferences-updated: UserPreferencesUpdated from profile-and-study-preferences-service (matchingProd).
+  // availability-updates: AvailabilityCreated | Updated | Deleted (availability-management-service).
   const maxSubscribeAttempts = Number(process.env.KAFKA_SUBSCRIBE_RETRIES || 12);
   let subscribeErr;
   for (let attempt = 1; attempt <= maxSubscribeAttempts; attempt++) {

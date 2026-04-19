@@ -49,9 +49,8 @@ const resolvers ={
             if(!isValid) throw new Error("Incorrect email or password.");
             const secret = process.env.SECRET_KEY?.trim();
             if (!secret) throw new Error("Server configuration error.");
-            // Include username so downstream services (e.g. profile → Kafka → matching) can set display name without an extra auth round-trip.
             const token = jwt.sign(
-                { id: user.id, email: user.email, username: user.username },
+                { id: user.id, email: user.email },
                 secret,
                 { expiresIn: "1h" }
             );
