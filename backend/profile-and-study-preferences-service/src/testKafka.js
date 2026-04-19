@@ -1,4 +1,4 @@
-import { connectProducer, publishEvent } from './kafka.js';
+import { connectProducer, publishEvent } from './matchingProd.js';
 
 async function test() {
   await connectProducer();
