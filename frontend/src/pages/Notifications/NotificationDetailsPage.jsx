@@ -7,6 +7,7 @@ import {
 import { useEffect, useMemo } from "react";
 import PageHeader from "../../components/ui/PageHeader";
 import Button from "../../components/ui/Button";
+import Loading from "../../components/ui/Loading";
 
 export default function NotificationDetailsPage() {
   const { id } = useParams();
@@ -64,13 +65,7 @@ export default function NotificationDetailsPage() {
   }, [notification]);
 
   // Loading state
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 pt-6">
-        <p className="text-slate-600">Loading...</p>
-      </div>
-    );
-  }
+  if (loading) return <Loading></Loading>
 
   // Error state
   if (error) {

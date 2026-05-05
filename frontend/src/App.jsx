@@ -12,6 +12,8 @@ import SessionCreatePage from "./pages/SessionCreatePage";
 import SessionDetailPage from "./pages/SessionDetailPage";
 import Notifications from "./pages/Notifications/Notifications";
 import NotificationDetailsPage from "./pages/Notifications/NotificationDetailsPage";
+import ProfileEdit from "./pages/Profile/ProfileEdit.jsx";
+import ProfilePage from "./pages/Profile/Profile.jsx";
 
 function App() {
   return (
@@ -26,6 +28,17 @@ function App() {
             <Notifications></Notifications>
           </ProtectedRoute>
         } />
+        <Route path="/settings" element={
+          <ProtectedRoute>
+            <ProfileEdit/>
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <ProfilePage/>
+          </ProtectedRoute>
+        } />
+
         <Route path="/notifications/:id" element={
           <ProtectedRoute>
             <NotificationDetailsPage />
