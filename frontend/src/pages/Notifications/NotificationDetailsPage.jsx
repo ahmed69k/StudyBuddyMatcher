@@ -3,10 +3,10 @@ import { useQuery, useMutation } from "@apollo/client/react";
 import {
   GET_MY_NOTIFICATIONS,
   OPEN_NOTIFICATION,
-} from "../graphql/notifications";
+} from "../../graphql/notifications";
 import { useEffect, useMemo } from "react";
-import PageHeader from "../components/ui/PageHeader";
-import Button from "../components/ui/Button";
+import PageHeader from "../../components/ui/PageHeader";
+import Button from "../../components/ui/Button";
 
 export default function NotificationDetailsPage() {
   const { id } = useParams();

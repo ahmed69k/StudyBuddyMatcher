@@ -1,8 +1,8 @@
 import { useQuery } from "@apollo/client/react";
-import { GET_MY_NOTIFICATIONS } from "../graphql/notifications";
-import { useAuthUser } from "../hooks/useAuthUser";
-import PageHeader from "../components/ui/PageHeader";
-import Button from "../components/ui/Button";
+import { GET_MY_NOTIFICATIONS } from "../../graphql/notifications";
+import { useAuthUser } from "../../hooks/useAuthUser";
+import PageHeader from "../../components/ui/PageHeader";
+import Button from "../../components/ui/Button";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 

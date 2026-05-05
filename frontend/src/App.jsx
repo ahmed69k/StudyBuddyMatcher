@@ -10,8 +10,8 @@ import MatchDetailPage from "./pages/MatchDetailPage";
 import StudySessionsPage from "./pages/StudySessionsPage";
 import SessionCreatePage from "./pages/SessionCreatePage";
 import SessionDetailPage from "./pages/SessionDetailPage";
-import Notifications from "./pages/Notifications";
-import NotificationDetailsPage from "./pages/NotificationDetailsPage";
+import Notifications from "./pages/Notifications/Notifications";
+import NotificationDetailsPage from "./pages/Notifications/NotificationDetailsPage";
 
 function App() {
   return (
