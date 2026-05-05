@@ -47,12 +47,38 @@ function Modal({
             onChange={(e) => setValue(e.target.value)}
           />
         ) : (
-          <input
-            type="file"
-            accept="image/*"
-            className="mt-4 w-full text-sm"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
+          <div className="mt-4">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-6 text-sm font-semibold text-violet-700 transition hover:bg-violet-100">
+              
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                />
+              </svg>
+
+              Upload Image
+
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </label>
+
+            {/** optional preview text */}
+            <p className="mt-2 text-xs text-slate-500">
+              PNG, JPG or WEBP (max recommended 2MB)
+            </p>
+          </div>
         )}
 
         <div className="mt-6 flex justify-end gap-3">
