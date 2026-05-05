@@ -24,6 +24,7 @@ const kafka = new Kafka({
 const producer = kafka.producer();
 let isConnected = false;
 
+/** Connects the Kafka producer once; sets `isConnected` so publish helpers skip work if the broker was down. */
 export const connectProducer = async () => {
   try {
     await producer.connect();
@@ -35,6 +36,7 @@ export const connectProducer = async () => {
   }
 };
 
+/** Emits lifecycle events (`StudySessionCreated`, updates, join/leave/cancel) to `study-session-events` for other services. */
 export const publishDomainEvent = async (topic, eventName, payload) => {
   if (!isConnected) return;
   const message = {
@@ -67,7 +69,9 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
 //   topic: "notifications",
 //   messages: [{ value: JSON.stringify({ recipient, subject, message }) }],
 // });
-/** EDIT: enveloped NotificationRequested for notification-service. */
+/**
+ * Sends a user notification by publishing a `NotificationRequested` envelope to `notifications` for notification-service.
+ */
 export const publishNotification = async ({ recipient, subject, message }) => {
   if (!isConnected) return;
   const envelope = {
