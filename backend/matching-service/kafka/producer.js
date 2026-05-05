@@ -36,6 +36,7 @@ export const connectProducer = async () => {
   }
 };
 
+/** Publishes a structured domain event (envelope with correlation id) to any Kafka topic — e.g. `matching-events`. */
 export const publishDomainEvent = async (topic, eventName, payload) => {
   const message = {
     eventName,
@@ -56,6 +57,10 @@ export const publishDomainEvent = async (topic, eventName, payload) => {
   }
 };
 
+/**
+ * Asks the notification pipeline to notify a user by publishing `NotificationRequested`
+ * on the shared `notifications` topic (consumed by notification-service).
+ */
 export const publishNotification = async ({ recipient, subject, message }) => {
   const envelope = {
     eventName: "NotificationRequested",
@@ -76,6 +81,7 @@ export const publishNotification = async ({ recipient, subject, message }) => {
   }
 };
 
+/** Broadcasts buddy-request lifecycle changes (`BuddyRequestCreated`, accept/decline/cancel) for downstream consumers. */
 export const publishBuddyRequestEvent = async (eventName, payload) => {
   const message = {
     eventName,

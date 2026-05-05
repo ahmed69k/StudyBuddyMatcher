@@ -21,6 +21,7 @@ const server = new ApolloServer({
   introspection: true,
 });
 
+/** Waits between Prisma connection retries when the database is slow to accept connections. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ORIGINAL (PRISMA THEN AWAIT KAFKA THEN HTTP):
@@ -34,6 +35,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // }
 // await connectProducer();
 // EDIT: RETRY PRISMA WHEN DB / NEON IS SLOW TO ACCEPT CONNECTIONS
+/** Establishes PostgreSQL with exponential-style retry so the container survives DB startup lag. */
 const connectPrismaWithRetry = async () => {
   const maxAttempts = Number(process.env.PRISMA_CONNECT_RETRIES || 10);
   const delayMs = Number(process.env.PRISMA_CONNECT_DELAY_MS || 1500);
@@ -69,17 +71,43 @@ const port = Number(process.env.PORT) || 3004;
 // EDIT: TRIM JWT SECRET FROM .ENV
 const jwtSecret = process.env.SECRET_KEY?.trim();
 
+/*
+ * --- Previous bootstrap (Prisma + Kafka/reminders before HTTP) — kept for reference; do not use. ---
+ * const startServer = async () => {
+ *   await connectPrismaWithRetry();
+ *   connectProducer().catch((err) =>
+ *     console.warn("⚠️ Kafka producer (study-session-scheduling-service):", err?.message || err)
+ *   );
+ *   startSessionReminderScheduler(prisma);
+ *   const { url } = await startStandaloneServer(server, {
+ *     listen: { port, host: "0.0.0.0" },
+ *     context: async ({ req }) => {
+ *       const authHeader = req.headers.authorization || "";
+ *       const token = authHeader.replace("Bearer ", "").trim();
+ *       if (!token) return { user: null, prisma };
+ *       if (!jwtSecret) {
+ *         console.warn("study-session-scheduling-service: SECRET_KEY is not set");
+ *         return { user: null, prisma };
+ *       }
+ *       try {
+ *         const user = jwt.verify(token, jwtSecret);
+ *         return { user, prisma };
+ *       } catch (err) {
+ *         console.warn("Invalid token:", err.message);
+ *         return { user: null, prisma };
+ *       }
+ *     },
+ *   });
+ *   console.log(`Study Session Service is ready at ${url}`);
+ * };
+ * --- end previous bootstrap ---
+ */
+
+/**
+ * Listen for GraphQL before Prisma finishes so the stitched gateway can introspect this
+ * subgraph while the DB is still starting; then connect DB, Kafka, and reminders.
+ */
 const startServer = async () => {
-  await connectPrismaWithRetry();
-
-  // ORIGINAL: await connectProducer();
-  // EDIT: KAFKA NON-BLOCKING (DO NOT AWAIT BEFORE HTTP)
-  connectProducer().catch((err) =>
-    console.warn("⚠️ Kafka producer (study-session-scheduling-service):", err?.message || err)
-  );
-
-  startSessionReminderScheduler(prisma);
-
   const { url } = await startStandaloneServer(server, {
     listen: { port, host: "0.0.0.0" },
     context: async ({ req }) => {
@@ -104,7 +132,17 @@ const startServer = async () => {
     },
   });
 
-  console.log(`Study Session Service is ready at ${url}`);
+  console.log(`Study Session Service listening at ${url} (connecting DB…)`);
+
+  await connectPrismaWithRetry();
+
+  connectProducer().catch((err) =>
+    console.warn("⚠️ Kafka producer (study-session-scheduling-service):", err?.message || err)
+  );
+
+  startSessionReminderScheduler(prisma);
+
+  console.log(`Study Session Service ready (DB + reminders)`);
 };
 
 startServer().catch((err) => {

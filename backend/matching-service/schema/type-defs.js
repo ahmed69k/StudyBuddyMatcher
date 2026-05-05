@@ -1,3 +1,4 @@
+/** GraphQL SDL: types, queries, and mutations exposed by matching-service (and merged by the gateway). */
 const typeDefs = `#graphql
   type UserProfile {
     id: String!

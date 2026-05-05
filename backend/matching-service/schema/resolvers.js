@@ -1,7 +1,12 @@
 import { publishDomainEvent, publishNotification, publishBuddyRequestEvent } from "../kafka/producer.js";
 
+/** Clamps the raw heuristic sum to an integer percentage in 0–100 for display and thresholds. */
 const normalizeScore = (raw) => Math.max(0, Math.min(100, Math.round(raw)));
 
+/**
+ * Core matching logic: scores two `UserProfile` rows from shared courses/topics/availability and study prefs;
+ * returns a capped score plus human-readable `reasons` for the UI or evaluation demo.
+ */
 const computeCompatibility = (a, b) => {
   let score = 0;
   const reasons = [];
@@ -52,7 +57,10 @@ const computeCompatibility = (a, b) => {
   };
 };
 
-/** Called from kafka/consumer.js after profile or availability updates (not from GraphQL reads). */
+/**
+ * After Kafka-driven profile changes: recomputes best match for `userId`, emits `MatchIdentified` on `matching-events`,
+ * and requests an in-app notification (not used on pure GraphQL reads of `recommendMatches`).
+ */
 export async function publishTopMatchAfterDataChange(prisma, userId) {
   const source = await prisma.userProfile.findUnique({ where: { userId } });
   if (!source) return;
@@ -83,6 +91,7 @@ export async function publishTopMatchAfterDataChange(prisma, userId) {
   });
 }
 
+/** Minimum `computeCompatibility` score required to send a buddy request; overridable via `BUDDY_REQUEST_MIN_COMPATIBILITY_SCORE`. */
 const minBuddyRequestCompatibility = () => {
   const raw = process.env.BUDDY_REQUEST_MIN_COMPATIBILITY_SCORE;
   if (raw === undefined || raw === "") return 40;
@@ -90,17 +99,21 @@ const minBuddyRequestCompatibility = () => {
   return Number.isFinite(n) ? n : 40;
 };
 
+/** Ensures the resolver was called with a valid JWT (`context.user`); throws if missing. */
 const assertAuthenticated = (context) => {
   if (!context?.user) throw new Error("Not authenticated");
 };
 
+/** Ensures the caller’s JWT identity matches `userId` so users cannot read or change another account’s data. */
 const assertSelf = (context, userId) => {
   assertAuthenticated(context);
   if (context.user.id !== userId) throw new Error("Not authorized");
 };
 
+/** Serializes Prisma `Date` fields to ISO strings for GraphQL `String` response fields. */
 const toIso = (d) => (d instanceof Date ? d.toISOString() : String(d));
 
+/** Maps a `buddyRequest` DB row to the GraphQL type (string dates, same field names). */
 const mapBuddyRequest = (row) => ({
   ...row,
   createdAt: toIso(row.createdAt),
@@ -109,17 +122,22 @@ const mapBuddyRequest = (row) => ({
 
 const resolvers = {
   Query: {
+    /** Returns one `UserProfile` row for the given id; caller must be that user. */
     userProfile: async (_, { userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
       return prisma.userProfile.findUnique({ where: { userId } });
     },
+    /** Lists profiles visible to the caller — currently only the authenticated user’s own profile (0 or 1 row). */
     userProfiles: async (_, __, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
       const profile = await prisma.userProfile.findUnique({ where: { userId: context.user.id } });
       return profile ? [profile] : [];
     },
+    /**
+     * Ranks every other stored profile by `computeCompatibility`, returns top `maxResults` with scores and reasons (read-only; no Kafka).
+     */
     recommendMatches: async (_, { userId, maxResults = 10 }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
@@ -138,6 +156,7 @@ const resolvers = {
       // Reads only: Kafka MatchIdentified + notifications run from kafka/consumer.js after data changes.
       return top;
     },
+    /** Fetches one buddy request if the caller is requester or receiver (privacy). */
     buddyRequest: async (_, { id }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -149,6 +168,7 @@ const resolvers = {
       }
       return mapBuddyRequest(row);
     },
+    /** Buddy requests where the current user is the receiver; optional filter by status. */
     myIncomingBuddyRequests: async (_, { status }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -160,6 +180,7 @@ const resolvers = {
       });
       return rows.map(mapBuddyRequest);
     },
+    /** Buddy requests sent by the current user; optional filter by status. */
     myOutgoingBuddyRequests: async (_, { status }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -173,6 +194,9 @@ const resolvers = {
     },
   },
   Mutation: {
+    /**
+     * Create/update the matching-service copy of a user’s profile with PATCH semantics (omitted fields keep DB values).
+     */
     upsertUserProfile: async (_, { profile }, context) => {
       const { prisma } = context;
       const { userId, name, email, courses = [], topics = [], studyPace, studyMode, preferredGroupSize, studyStyle, availability = [] } = profile;
@@ -205,12 +229,17 @@ const resolvers = {
       });
       return upserted;
     },
+    /** Removes the caller’s `UserProfile` row from the matching database. */
     deleteUserProfile: async (_, { userId }, context) => {
       const { prisma } = context;
       assertSelf(context, userId);
       const deleted = await prisma.userProfile.deleteMany({ where: { userId } });
       return deleted.count > 0;
     },
+    /**
+     * Creates a PENDING buddy request if compatibility ≥ minimum, prevents duplicate pendings,
+     * then publishes Kafka buddy-request + notification events.
+     */
     sendBuddyRequest: async (_, { input }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -271,6 +300,7 @@ const resolvers = {
 
       return mapBuddyRequest(created);
     },
+    /** Receiver accepts or declines; updates status and notifies the requester via Kafka. */
     respondToBuddyRequest: async (_, { requestId, decision }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);
@@ -311,6 +341,7 @@ const resolvers = {
 
       return mapBuddyRequest(updated);
     },
+    /** Requester sets status to CANCELLED on a still-PENDING request and notifies the receiver. */
     cancelBuddyRequest: async (_, { requestId }, context) => {
       const { prisma } = context;
       assertAuthenticated(context);

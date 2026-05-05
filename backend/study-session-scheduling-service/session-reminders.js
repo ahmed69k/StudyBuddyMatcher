@@ -1,15 +1,17 @@
 import { publishNotification } from "./kafka/producer.js";
 
+/** Shifts a `Date` forward by `minutes` — used to define the “starts within N minutes” reminder window. */
 const addMinutes = (d, minutes) => new Date(d.getTime() + minutes * 60 * 1000);
 
 /**
- * Polls for sessions starting within SESSION_REMINDER_LEAD_MINUTES (default 60)
- * and notifies all participants once (upcomingReminderSentAt).
+ * Background job: on a fixed interval, finds sessions starting soon that have not been reminded yet,
+ * notifies creator + participants via Kafka, then sets `upcomingReminderSentAt` so each session is pinged once.
  */
 export function startSessionReminderScheduler(prisma) {
   const leadMin = Number(process.env.SESSION_REMINDER_LEAD_MINUTES || 60);
   const pollMs = Number(process.env.SESSION_REMINDER_POLL_MS || 300_000);
 
+  /** One polling cycle: query due sessions, fan-out notifications, mark rows as reminded. */
   const tick = async () => {
     const now = new Date();
     const horizon = addMinutes(now, leadMin);

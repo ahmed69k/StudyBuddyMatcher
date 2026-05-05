@@ -21,6 +21,7 @@ const server = new ApolloServer({
   introspection: true,
 });
 
+/** Pauses execution for database retry backoff between Prisma connection attempts. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ORIGINAL (PRISMA ONCE THEN THROW):
@@ -33,6 +34,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 //   throw err;
 // }
 // EDIT: RETRY PRISMA WHEN DB / NEON IS SLOW TO ACCEPT CONNECTIONS
+/** Connects to PostgreSQL with repeated attempts so Docker/Neon cold starts do not crash the service on boot. */
 const connectPrismaWithRetry = async () => {
   const maxAttempts = Number(process.env.PRISMA_CONNECT_RETRIES || 10);
   const delayMs = Number(process.env.PRISMA_CONNECT_DELAY_MS || 1500);
@@ -66,19 +68,45 @@ const port = Number(process.env.PORT) || 3003;
 // EDIT: TRIM SECRET SO .ENV SPACES DO NOT BREAK JWT VS OTHER SERVICES
 const jwtSecret = process.env.SECRET_KEY?.trim();
 
+/*
+ * --- Previous bootstrap (Prisma + Kafka before HTTP) — kept for reference; do not use. ---
+ * const startServer = async () => {
+ *   await connectPrismaWithRetry();
+ *   connectProducer().catch((err) =>
+ *     console.warn("⚠️ Kafka producer (matching-service):", err?.message || err)
+ *   );
+ *   startConsumer(prisma).catch((err) =>
+ *     console.warn("⚠️ Kafka consumer (matching-service):", err?.message || err)
+ *   );
+ *   const { url } = await startStandaloneServer(server, {
+ *     listen: { port, host: "0.0.0.0" },
+ *     context: async ({ req }) => {
+ *       const authHeader = req.headers.authorization || "";
+ *       const token = authHeader.replace("Bearer ", "").trim();
+ *       if (!token) return { user: null, prisma };
+ *       if (!jwtSecret) {
+ *         console.warn("matching-service: SECRET_KEY is not set");
+ *         return { user: null, prisma };
+ *       }
+ *       try {
+ *         const user = jwt.verify(token, jwtSecret);
+ *         return { user, prisma };
+ *       } catch (err) {
+ *         console.warn("Invalid token:", err.message);
+ *         return { user: null, prisma };
+ *       }
+ *     },
+ *   });
+ *   console.log(`Matching Service is ready at ${url}`);
+ * };
+ * --- end previous bootstrap ---
+ */
+
+/**
+ * Listen for GraphQL before Prisma finishes so the stitched gateway can introspect this
+ * subgraph while the DB is still coming up; then connect DB and Kafka.
+ */
 const startServer = async () => {
-  await connectPrismaWithRetry();
-
-  // ORIGINAL: connectProducer().catch(() => {});
-  // ORIGINAL: startConsumer(prisma).catch(() => {});
-  // EDIT: KAFKA NON-BLOCKING; CONSUMER ALSO NON-BLOCKING
-  connectProducer().catch((err) =>
-    console.warn("⚠️ Kafka producer (matching-service):", err?.message || err)
-  );
-  startConsumer(prisma).catch((err) =>
-    console.warn("⚠️ Kafka consumer (matching-service):", err?.message || err)
-  );
-
   const { url } = await startStandaloneServer(server, {
     listen: { port, host: "0.0.0.0" },
     context: async ({ req }) => {
@@ -103,7 +131,18 @@ const startServer = async () => {
     },
   });
 
-  console.log(`Matching Service is ready at ${url}`);
+  console.log(`Matching Service listening at ${url} (connecting DB…)`);
+
+  await connectPrismaWithRetry();
+
+  connectProducer().catch((err) =>
+    console.warn("⚠️ Kafka producer (matching-service):", err?.message || err)
+  );
+  startConsumer(prisma).catch((err) =>
+    console.warn("⚠️ Kafka consumer (matching-service):", err?.message || err)
+  );
+
+  console.log(`Matching Service ready (DB + Kafka workers started)`);
 };
 
 startServer().catch((err) => {
