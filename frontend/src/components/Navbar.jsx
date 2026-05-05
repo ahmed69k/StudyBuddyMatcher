@@ -133,7 +133,7 @@ export default function Navbar() {
             className="text-xl font-extrabold tracking-tight text-slate-900"
           >
             <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-teal-500 bg-clip-text text-transparent">
-              Study Buddy
+              Study Buddy Matcher
             </span>
           </NavLink>
 
