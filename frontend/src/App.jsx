@@ -10,6 +10,7 @@ import MatchDetailPage from "./pages/MatchDetailPage";
 import StudySessionsPage from "./pages/StudySessionsPage";
 import SessionCreatePage from "./pages/SessionCreatePage";
 import SessionDetailPage from "./pages/SessionDetailPage";
+import Notifications from "./pages/Notifications";
 
 function App() {
   return (
@@ -19,6 +20,11 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/notifications" element={
+          <ProtectedRoute>
+            <Notifications></Notifications>
+          </ProtectedRoute>
+        } />
         <Route
           path="/matches/setup"
           element={

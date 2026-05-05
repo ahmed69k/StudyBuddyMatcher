@@ -28,6 +28,12 @@ services:
       - "3007:3000"
     env_file:
       - ./user-and-auth-service/.env
+    # EDIT: ensures gateway waits for auth readiness before schema stitching
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # ORIGINAL: PROFILE SERVICE NOT LISTED IN COMPOSE
   # EDIT: PROFILE SERVICE ADDED FOR GATEWAY / COMPOSE NETWORK
@@ -44,6 +50,13 @@ services:
       PORT: "3001"
     env_file:
       - ./profile-and-study-preferences-service/.env
+    # EDIT: ensures gateway waits for profile readiness
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   notification-service:
     depends_on:
       - kafka
@@ -55,6 +68,12 @@ services:
       PORT: "3005"
     env_file:
       - ./notification-service/.env
+    # EDIT: FIX gateway missing notifications issue (stitch wait)
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3005', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   matching-service:
     depends_on:
@@ -68,6 +87,12 @@ services:
     env_file:
       - path: ./matching-service/.env
         required: false
+    # EDIT: gateway schema safety
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   study-session-scheduling-service:
     depends_on:
@@ -81,6 +106,12 @@ services:
     env_file:
       - path: ./study-session-scheduling-service/.env
         required: false
+    # EDIT: ensures stable stitching
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   feedback-trust-service:
     depends_on:
@@ -95,6 +126,12 @@ services:
     env_file:
       - path: ./feedback-trust-service/.env
         required: false
+    # EDIT: gateway readiness guarantee
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4010', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   messaging-service:
     build: ./messaging-service
@@ -103,9 +140,13 @@ services:
       - "8001:8001"
     env_file:
       - ./messaging-service/.env
+    # EDIT: ensures messaging schema is ready before gateway stitch
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8000', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # ORIGINAL: AVAILABILITY SERVICE NOT LISTED IN COMPOSE
-  # EDIT: AVAILABILITY SERVICE ADDED FOR GATEWAY (PORT 3002 IN TEAM SCHEME)
   availability-management-service:
     depends_on:
       - kafka
@@ -118,20 +159,37 @@ services:
     env_file:
       - path: ./availability-management-service/.env
         required: false
+    # EDIT: required for stable gateway schema stitching
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002', r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   graphql-gateway:
     build: ./graphql-gateway
     ports:
       - "4001:4001"
+
+    # EDIT: CRITICAL FIX — wait for ALL services to actually be ready
     depends_on:
-      - user-and-auth-service
-      - profile-and-study-preferences-service
-      - notification-service
-      - matching-service
-      - availability-management-service
-      - study-session-scheduling-service
-      - feedback-trust-service
-      - messaging-service
+      user-and-auth-service:
+        condition: service_healthy
+      profile-and-study-preferences-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      matching-service:
+        condition: service_healthy
+      availability-management-service:
+        condition: service_healthy
+      study-session-scheduling-service:
+        condition: service_healthy
+      feedback-trust-service:
+        condition: service_healthy
+      messaging-service:
+        condition: service_healthy
+
     environment:
       PORT: "4001"
       # Service hostname + container listen port (3000). Host browser: http://localhost:3007/
