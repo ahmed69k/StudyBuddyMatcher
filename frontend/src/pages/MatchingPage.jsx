@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@apollo/client/react";
 import {
   RECOMMEND_MATCHES,
   SEND_BUDDY_REQUEST,
