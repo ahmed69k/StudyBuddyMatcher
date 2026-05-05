@@ -74,14 +74,14 @@ export async function startConsumer() {
         console.warn("notification-service: unhandled notifications message", { eventType });
         return;
       }
-      const { recipient, subject, message } = parsedPayload;
+      const { recipient, subject, message:body } = parsedPayload;
       console.log("Received notification event:", {
         eventType: eventType || "flat",
         timestamp: parsed.timestamp,
         producerService: parsed.producerService,
         correlationId: parsed.correlationId,
       });
-      await sendNotif(recipient, subject, message);
+      await sendNotif(recipient, subject, body);
     },
   });
   console.log("Kafka Notification Consumer Is Running...");
