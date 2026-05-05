@@ -11,6 +11,7 @@ import StudySessionsPage from "./pages/StudySessionsPage";
 import SessionCreatePage from "./pages/SessionCreatePage";
 import SessionDetailPage from "./pages/SessionDetailPage";
 import Notifications from "./pages/Notifications";
+import NotificationDetailsPage from "./pages/NotificationDetailsPage";
 
 function App() {
   return (
@@ -23,6 +24,11 @@ function App() {
         <Route path="/notifications" element={
           <ProtectedRoute>
             <Notifications></Notifications>
+          </ProtectedRoute>
+        } />
+        <Route path="/notifications/:id" element={
+          <ProtectedRoute>
+            <NotificationDetailsPage />
           </ProtectedRoute>
         } />
         <Route

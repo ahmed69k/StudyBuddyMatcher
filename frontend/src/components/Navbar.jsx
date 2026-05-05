@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@apollo/client/react";
 import { GET_ME } from "../graphql/auth";
+import { GET_MY_NOTIFICATIONS } from "../graphql/notifications";
 
 const navClass = ({ isActive }) =>
   `relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
@@ -36,6 +37,7 @@ function Avatar({ name, imageUrl, size = "md" }) {
 
 export default function Navbar() {
   const navigate = useNavigate();
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -57,8 +59,23 @@ export default function Navbar() {
 
   const user = data?.me;
 
+  // 🔔 Notifications query
+  const { data: notifData } = useQuery(GET_MY_NOTIFICATIONS, {
+    skip: !isLoggedIn,
+    fetchPolicy: "cache-and-network",
+  });
+
+  const unreadCount = useMemo(() => {
+    return (
+      notifData?.getMyNotifications?.filter((n) => !n.readStatus).length || 0
+    );
+  }, [notifData]);
+
   useEffect(() => {
-    if (error?.message?.includes("Unauthorized") || error?.message?.includes("Not authenticated")) {
+    if (
+      error?.message?.includes("Unauthorized") ||
+      error?.message?.includes("Not authenticated")
+    ) {
       localStorage.removeItem("token");
       setIsLoggedIn(false);
     }
@@ -120,9 +137,15 @@ export default function Navbar() {
             </span>
           </NavLink>
 
+          {/* NAV LINKS */}
           <div className="hidden items-center gap-1 md:flex">
             {mainLinks.map((item) => (
-              <NavLink key={item.to} to={item.to} end={item.to === "/"} className={navClass}>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={navClass}
+              >
                 <svg
                   className="h-4 w-4"
                   fill="none"
@@ -141,23 +164,21 @@ export default function Navbar() {
             ))}
           </div>
 
+          {/* RIGHT SIDE */}
           <div className="hidden items-center gap-3 md:flex">
             {isLoggedIn ? (
               showUserLoading ? (
                 <span className="text-sm text-slate-400">…</span>
               ) : (
-                <div className="relative">
+                <div className="relative flex items-center gap-2">
+
+                  {/* 🔔 NOTIFICATIONS BUTTON */}
                   <button
-                    type="button"
-                    onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className="flex items-center gap-3 rounded-2xl py-1 pl-1 pr-3 transition-colors hover:bg-violet-50"
+                    onClick={() => navigate("/notifications")}
+                    className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-slate-700 transition hover:bg-violet-100"
                   >
-                    <Avatar name={user?.username} imageUrl={user?.profilePicture} />
-                    <span className="max-w-[10rem] truncate text-sm font-semibold text-slate-800">
-                      {user?.username ?? "Account"}
-                    </span>
                     <svg
-                      className={`h-4 w-4 text-slate-500 transition-transform ${isProfileOpen ? "rotate-180" : ""}`}
+                      className="h-5 w-5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -166,148 +187,70 @@ export default function Navbar() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth="2"
-                        d="M19 9l-7 7-7-7"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"
                       />
                     </svg>
+
+                    {unreadCount > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white shadow">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
                   </button>
 
-                  {isProfileOpen ? (
-                    <div className="animate-slide-down absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-2xl">
-                      <div className="bg-gradient-to-r from-violet-600 to-teal-600 p-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar
-                            name={user?.username}
-                            imageUrl={user?.profilePicture}
-                            size="lg"
-                          />
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-white">
-                              {user?.username}
-                            </p>
-                            <p className="truncate text-sm text-white/85">
-                              {user?.email}
-                            </p>
-                          </div>
+                  {/* PROFILE */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsProfileOpen(!isProfileOpen)}
+                      className="flex items-center gap-3 rounded-2xl py-1 pl-1 pr-3 transition-colors hover:bg-violet-50"
+                    >
+                      <Avatar
+                        name={user?.username}
+                        imageUrl={user?.profilePicture}
+                      />
+                      <span className="max-w-[10rem] truncate text-sm font-semibold text-slate-800">
+                        {user?.username ?? "Account"}
+                      </span>
+                    </button>
+
+                    {isProfileOpen && (
+                      <div className="absolute right-0 mt-3 w-72 overflow-hidden rounded-2xl border border-violet-100 bg-white shadow-2xl">
+                        <div className="p-4 bg-gradient-to-r from-violet-600 to-teal-600 text-white">
+                          <p className="font-semibold">{user?.username}</p>
+                          <p className="text-sm opacity-80">{user?.email}</p>
                         </div>
-                      </div>
-                      <div className="p-2">
+
                         <button
-                          type="button"
                           onClick={handleLogout}
-                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 font-medium text-rose-600 transition-colors hover:bg-rose-50"
+                          className="w-full px-4 py-3 text-left text-rose-600 hover:bg-rose-50"
                         >
-                          <svg
-                            className="h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth="2"
-                              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                            />
-                          </svg>
                           Log out
                         </button>
                       </div>
-                    </div>
-                  ) : null}
+                    )}
+                  </div>
                 </div>
               )
             ) : (
               <div className="flex items-center gap-2">
-                <NavLink
-                  to="/login"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50"
-                >
-                  Sign in
-                </NavLink>
-                <NavLink
-                  to="/register"
-                  className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-transform hover:-translate-y-0.5 hover:shadow-xl"
-                >
-                  Get started
-                </NavLink>
+                <NavLink to="/login">Sign in</NavLink>
+                <NavLink to="/register">Get started</NavLink>
               </div>
             )}
           </div>
 
-          <div className="flex md:hidden">
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-slate-700 transition-colors hover:bg-violet-100"
-              aria-expanded={isMenuOpen}
-              aria-label="Menu"
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {isMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div
-          className={`md:hidden transition-[max-height] duration-300 ease-out ${
-            isMenuOpen ? "max-h-[28rem] border-t border-violet-100" : "max-h-0 overflow-hidden"
-          }`}
-        >
-          <div className="space-y-1 bg-white/95 px-4 py-4 backdrop-blur-xl">
-            {mainLinks.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 font-medium text-slate-700 hover:bg-gradient-to-r hover:from-violet-50 hover:to-teal-50 hover:text-violet-800"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} />
-                </svg>
-                {item.name}
-              </NavLink>
-            ))}
-            <div className="mt-3 border-t border-violet-100 pt-3">
-              {isLoggedIn ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleLogout();
-                    setIsMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 font-medium text-rose-600 hover:bg-rose-50"
-                >
-                  Log out
-                </button>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <NavLink
-                    to="/login"
-                    className="rounded-xl py-3 text-center font-semibold text-violet-700"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Sign in
-                  </NavLink>
-                  <NavLink
-                    to="/register"
-                    className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 py-3 text-center font-semibold text-white shadow-md"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Get started
-                  </NavLink>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* MOBILE BUTTON */}
+          <button
+            className="md:hidden"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            ☰
+          </button>
         </div>
       </nav>
 
-      <div className="h-[4.25rem]" aria-hidden />
+      <div className="h-[4.25rem]" />
     </>
   );
 }
