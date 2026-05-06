@@ -4,11 +4,15 @@ import App from './App.jsx'
 import {ApolloProvider} from "@apollo/client/react"
 import client from './apolloClient.js'
 import {BrowserRouter} from "react-router-dom";
+import { Toaster } from "react-hot-toast";
+
+
 
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ApolloProvider client={client}>
+      <Toaster position="top-right" />
       <BrowserRouter>
         <App />
       </BrowserRouter>
