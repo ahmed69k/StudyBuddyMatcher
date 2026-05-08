@@ -2,7 +2,7 @@ import { ApolloServer } from '@apollo/server';
 import { startStandaloneServer } from '@apollo/server/standalone';
 import { typeDefs } from './src/graphql/typeDefs.js';
 import { resolvers } from './src/graphql/resolvers.js';
-import { connectProducer } from './src/kafka.js';
+import { connectProducer } from './src/notifProd.js';
 import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 
