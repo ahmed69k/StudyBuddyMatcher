@@ -1,3 +1,4 @@
+/** GraphQL SDL: study session entities and operations for this microservice. */
 const typeDefs = `#graphql
   enum SessionType {
     ONLINE

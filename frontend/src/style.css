@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Study Buddy — pastel lavender ↔ teal, elevated contrast for accessibility */
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-surface-50: #faf8ff;
+  --color-surface-100: #f4f0ff;
+  --color-surface-900: #1e1b4b;
+
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+
+  --color-accent-teal-300: #5eead4;
+  --color-accent-teal-400: #2dd4bf;
+  --color-accent-teal-500: #14b8a6;
+
+  --shadow-soft: 0 8px 30px rgb(109 40 217 / 0.08);
+  --shadow-card: 0 4px 24px rgb(15 23 42 / 0.06);
+}
+
+@layer base {
+  html {
+    @apply antialiased font-sans text-slate-800 scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-[linear-gradient(135deg,var(--color-surface-100)_0%,#ecfeff_45%,var(--color-surface-50)_100%)];
+  }
+
+  ::selection {
+    @apply bg-violet-200 text-violet-950;
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.28s ease-out;
+}

@@ -24,8 +24,12 @@ const kafka = new Kafka({
 const groupId = process.env.KAFKA_GROUP_ID || "matching-group";
 const consumer = kafka.consumer({ groupId });
 
+/** Delay between Kafka subscribe retries when the broker is not ready yet. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Parses Kafka message JSON into `{ eventName, payload }`; supports legacy producers that used `event` instead of `eventName`.
+ */
 const getEnvelope = (raw) => {
   if (!raw) return null;
   const parsed = JSON.parse(raw);
@@ -38,6 +42,9 @@ const getEnvelope = (raw) => {
   return { eventName: null, payload: parsed };
 };
 
+/**
+ * Normalizes availability slot objects from different producers into one string key stored in `UserProfile.availability`.
+ */
 const availabilitySlotToString = (slot) => {
   const day = slot.dayOfWeek ?? slot.day ?? slot.weekday;
   const start = slot.startHour ?? slot.start ?? slot.from;
@@ -46,6 +53,83 @@ const availabilitySlotToString = (slot) => {
   return `${day} ${start}-${end}`;
 };
 
+/**
+ * Applies `UserPreferencesUpdated` from the profile service: upserts matching `UserProfile` (courses, topics, study prefs, identity),
+ * then triggers optional “top match” notification via `publishTopMatchAfterDataChange`.
+ * Returns true if this message was handled (caller should skip further processing).
+ */
+async function handleUserPreferencesUpdated(prisma, topic, env) {
+  if (env.eventName !== "UserPreferencesUpdated") return false;
+
+  const payload = env.payload || {};
+  const pref = payload.studyPreference || {};
+  /** Display name for matching is the auth username; producers may send name, userName, or username. */
+  const identityName =
+    payload.name !== undefined && payload.name !== null
+      ? payload.name
+      : payload.userName !== undefined && payload.userName !== null
+        ? payload.userName
+        : payload.username;
+  const identityEmail =
+    payload.email !== undefined ? payload.email : payload.userEmail;
+
+  const userId = payload.userId;
+  if (!userId) return true;
+
+  let mergedName;
+  if (identityName !== undefined) {
+    const trimmed = String(identityName).trim();
+    mergedName = trimmed !== "" ? trimmed : "Unknown";
+  }
+
+  const updateData = {
+    courses: payload.courses || [],
+    topics: payload.topics || [],
+    studyPace: pref.pace ?? null,
+    studyMode: pref.mode ?? null,
+    preferredGroupSize: pref.groupSize ?? null,
+    studyStyle: pref.studyStyle ?? null,
+  };
+  if (mergedName !== undefined) {
+    updateData.name = mergedName;
+  }
+  if (identityEmail !== undefined) updateData.email = identityEmail;
+
+  await prisma.userProfile.upsert({
+    where: { userId },
+    create: {
+      userId,
+      name:
+        identityName !== undefined && String(identityName).trim() !== ""
+          ? String(identityName).trim()
+          : "Unknown",
+      email: identityEmail ?? null,
+      courses: payload.courses || [],
+      topics: payload.topics || [],
+      studyPace: pref.pace ?? null,
+      studyMode: pref.mode ?? null,
+      preferredGroupSize: pref.groupSize ?? null,
+      studyStyle: pref.studyStyle ?? null,
+      availability: [],
+    },
+    update: updateData,
+  });
+
+  console.log(
+    `[matching-service] Kafka handled UserPreferencesUpdated topic=${topic} userId=${userId}`
+  );
+  try {
+    await publishTopMatchAfterDataChange(prisma, userId);
+  } catch (err) {
+    console.warn("[matching-service] publishTopMatchAfterDataChange:", err?.message || err);
+  }
+  return true;
+}
+
+/**
+ * Subscribes to profile and availability Kafka topics and keeps `UserProfile` in sync; after updates, may emit match notifications.
+ * Safe no-op if Kafka is unreachable (logs warning, HTTP API still works).
+ */
 export const startConsumer = async (prisma) => {
   try {
     await consumer.connect();
@@ -54,26 +138,15 @@ export const startConsumer = async (prisma) => {
     return;
   }
 
-  // ORIGINAL comment block:
-  // Align with existing repo:
-  // - profile service publishes UserPreferencesUpdated to topic "notifications" (enveloped)
-  // - availability service publishes AvailabilityCreated/Updated/Deleted to topic "availability-updates" (enveloped)
-  // EDIT comment:
-  // notifications: UserPreferencesUpdated (profile) — matching handles; NotificationRequested (others) — notification-service.
+  // notifications: UserPreferencesUpdated (optional) + NotificationRequested (notification-service only).
+  // user-preferences-updated: UserPreferencesUpdated from profile-and-study-preferences-service (matchingProd).
   // availability-updates: AvailabilityCreated | Updated | Deleted (availability-management-service).
-  // ORIGINAL subscribe (single try, no retry/backoff):
-  // try {
-  //   await consumer.subscribe({ topic: "notifications" });
-  //   await consumer.subscribe({ topic: "availability-updates" });
-  // } catch (err) {
-  //   console.warn("⚠️ Kafka consumer subscribe failed (matching-service):", err?.message || err);
-  //   return;
-  // }
   const maxSubscribeAttempts = Number(process.env.KAFKA_SUBSCRIBE_RETRIES || 12);
   let subscribeErr;
   for (let attempt = 1; attempt <= maxSubscribeAttempts; attempt++) {
     try {
       await consumer.subscribe({ topic: "notifications" });
+      await consumer.subscribe({ topic: "user-preferences-updated" });
       await consumer.subscribe({ topic: "availability-updates" });
       subscribeErr = null;
       break;
@@ -90,50 +163,16 @@ export const startConsumer = async (prisma) => {
 
   try {
     await consumer.run({
+      // Per-message router: sync preferences from profile topics, or merge/delete availability slots and refresh top-match hints.
       eachMessage: async ({ topic, message }) => {
         const raw = message.value?.toString();
         const env = getEnvelope(raw);
         if (!env) return;
 
-        if (topic === "notifications" && env.eventName === "UserPreferencesUpdated") {
-          const payload = env.payload || {};
-          const pref = payload.studyPreference || {};
-
-          const userId = payload.userId;
-          if (!userId) return;
-
-          await prisma.userProfile.upsert({
-            where: { userId },
-            create: {
-              userId,
-              name: payload.name || "Unknown",
-              email: payload.email || null,
-              courses: payload.courses || [],
-              topics: payload.topics || [],
-              studyPace: pref.pace ?? null,
-              studyMode: pref.mode ?? null,
-              preferredGroupSize: pref.groupSize ?? null,
-              studyStyle: pref.studyStyle ?? null,
-              availability: [],
-            },
-            update: {
-              courses: payload.courses || [],
-              topics: payload.topics || [],
-              studyPace: pref.pace ?? null,
-              studyMode: pref.mode ?? null,
-              preferredGroupSize: pref.groupSize ?? null,
-              studyStyle: pref.studyStyle ?? null,
-            },
-          });
-
-          console.log(
-            `[matching-service] Kafka handled UserPreferencesUpdated topic=${topic} userId=${userId}`
-          );
-          try {
-            await publishTopMatchAfterDataChange(prisma, userId);
-          } catch (err) {
-            console.warn("[matching-service] publishTopMatchAfterDataChange:", err?.message || err);
-          }
+        if (
+          (topic === "notifications" || topic === "user-preferences-updated") &&
+          (await handleUserPreferencesUpdated(prisma, topic, env))
+        ) {
           return;
         }
 
