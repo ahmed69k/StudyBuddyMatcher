@@ -1,12 +1,19 @@
 import { useMemo } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@apollo/client/react";
+import toast from "react-hot-toast";
 import {
   RECOMMEND_MATCHES,
   SEND_BUDDY_REQUEST,
   MY_OUTGOING_BUDDY_REQUESTS,
+  MY_INCOMING_BUDDY_REQUESTS,
 } from "../graphql/matching";
 import { useAuthUser } from "../hooks/useAuthUser";
+import {
+  buddyRequestMinCompatibilityScore,
+  canSendBuddyRequest,
+} from "../lib/buddyRequestThreshold";
+import { buildAcceptedBuddyIdSet } from "../lib/acceptedBuddyIds";
 import PageHeader from "../components/ui/PageHeader";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
@@ -36,8 +43,15 @@ export default function MatchDetailPage() {
     fetchPolicy: "cache-and-network",
   });
 
+  const { data: incData } = useQuery(MY_INCOMING_BUDDY_REQUESTS, {
+    fetchPolicy: "cache-and-network",
+  });
+
   const [sendRequest, { loading: sending }] = useMutation(SEND_BUDDY_REQUEST, {
-    refetchQueries: [{ query: MY_OUTGOING_BUDDY_REQUESTS }],
+    refetchQueries: [
+      { query: MY_OUTGOING_BUDDY_REQUESTS },
+      { query: MY_INCOMING_BUDDY_REQUESTS },
+    ],
   });
 
   const item = useMemo(() => {
@@ -50,11 +64,37 @@ export default function MatchDetailPage() {
     (r) => r.receiverId === userId && r.status === "PENDING",
   );
 
+  const acceptedBuddyIds = useMemo(
+    () =>
+      buildAcceptedBuddyIdSet(
+        outData?.myOutgoingBuddyRequests,
+        incData?.myIncomingBuddyRequests,
+      ),
+    [outData, incData],
+  );
+
+  const isBuddy = userId ? acceptedBuddyIds.has(userId) : false;
+
   const handleSend = async () => {
-    if (!userId) return;
-    await sendRequest({
-      variables: { input: { receiverId: userId, message: null } },
-    });
+    if (!userId || !item) return;
+    if (acceptedBuddyIds.has(userId)) {
+      toast.error("You are already study buddies with this user.");
+      return;
+    }
+    if (!canSendBuddyRequest(item.compatibilityScore)) {
+      toast.error(
+        `Compatibility must be at least ${buddyRequestMinCompatibilityScore()}% to send a request.`,
+      );
+      return;
+    }
+    try {
+      await sendRequest({
+        variables: { input: { receiverId: userId, message: null } },
+      });
+      toast.success("Buddy request sent.");
+    } catch (e) {
+      toast.error(e?.message || "Could not send request");
+    }
   };
 
   if (userLoading || loading) {
@@ -89,6 +129,10 @@ export default function MatchDetailPage() {
   }
 
   const { profile, compatibilityScore, reasons } = item;
+  const minScore = buddyRequestMinCompatibilityScore();
+  const allowedByScore = canSendBuddyRequest(compatibilityScore);
+  const blockedByScore = minScore > 0 && !allowedByScore;
+  const showSendBuddy = !isBuddy;
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
@@ -159,19 +203,41 @@ export default function MatchDetailPage() {
         ) : null}
       </Card>
 
+      {isBuddy ? (
+        <p className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">
+          You and <strong>{profile.name}</strong> are already study buddies. Messaging will appear here when that
+          feature is connected.
+        </p>
+      ) : null}
+      {blockedByScore && !isBuddy ? (
+        <p className="mb-3 text-sm text-amber-800">
+          Buddy requests are only allowed when compatibility is at least{" "}
+          <strong>{minScore}%</strong> (same rule as the matching service). Improve shared courses, topics, or
+          overlapping weekly availability to raise the score.
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          disabled={sending || outgoingPending}
-          className="px-6 py-3"
-          onClick={handleSend}
-        >
-          {sending
-            ? "Sending…"
-            : outgoingPending
-              ? "Request pending"
-              : "Send buddy request"}
-        </Button>
+        {showSendBuddy ? (
+          <Button
+            type="button"
+            disabled={sending || outgoingPending || blockedByScore}
+            className="px-6 py-3"
+            title={
+              blockedByScore
+                ? `Minimum ${minScore}% compatibility required to send a buddy request.`
+                : undefined
+            }
+            onClick={handleSend}
+          >
+            {sending
+              ? "Sending…"
+              : outgoingPending
+                ? "Request pending"
+                : blockedByScore
+                  ? `Need ≥ ${minScore}% match`
+                  : "Send buddy request"}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="secondary"

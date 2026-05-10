@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import MatchingPage from "./pages/MatchingPage";
 import MatchingProfileSetupPage from "./pages/MatchingProfileSetupPage";
+import AvailabilityManagePage from "./pages/AvailabilityManagePage";
 import MatchDetailPage from "./pages/MatchDetailPage";
 import StudySessionsPage from "./pages/StudySessionsPage";
 import SessionCreatePage from "./pages/SessionCreatePage";
@@ -49,6 +50,14 @@ function App() {
           element={
             <ProtectedRoute>
               <MatchingProfileSetupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/availability"
+          element={
+            <ProtectedRoute>
+              <AvailabilityManagePage />
             </ProtectedRoute>
           }
         />
