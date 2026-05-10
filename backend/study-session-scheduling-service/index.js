@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone";
 import typeDefs from "./schema/type-defs.js";
@@ -64,6 +65,41 @@ const connectPrismaWithRetry = async () => {
   throw lastErr;
 };
 
+/**
+ * Applies SQL migrations (e.g. `StudySessionInvite`) before handling GraphQL traffic.
+ * Set SKIP_PRISMA_MIGRATE_ON_START=true only if you already ran `npm run migrate`.
+ */
+const runMigrateDeployWithRetry = async () => {
+  if (process.env.SKIP_PRISMA_MIGRATE_ON_START === "true") {
+    console.log(
+      "study-session-scheduling-service: skipping prisma migrate deploy (SKIP_PRISMA_MIGRATE_ON_START)"
+    );
+    return;
+  }
+  const maxAttempts = Number(process.env.PRISMA_MIGRATE_RETRIES || 15);
+  const delayMs = Number(process.env.PRISMA_MIGRATE_DELAY_MS || 5000);
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      execSync("npx prisma migrate deploy", {
+        stdio: "inherit",
+        env: process.env,
+        cwd: process.cwd(),
+      });
+      console.log("✅ study-session-scheduling-service: prisma migrate deploy OK");
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `⚠️ prisma migrate deploy attempt ${attempt}/${maxAttempts} failed:`,
+        err?.message || err
+      );
+      if (attempt < maxAttempts) await sleep(delayMs);
+    }
+  }
+  throw lastErr ?? new Error("prisma migrate deploy failed");
+};
+
 // ORIGINAL: listen used process.env.PORT || 4005 inline (later 3004)
 // EDIT: PARSE PORT FROM ENV (TEAM SCHEME: STUDY SESSION = 3004)
 const port = Number(process.env.PORT) || 3004;
@@ -108,6 +144,8 @@ const jwtSecret = process.env.SECRET_KEY?.trim();
  * subgraph while the DB is still starting; then connect DB, Kafka, and reminders.
  */
 const startServer = async () => {
+  await runMigrateDeployWithRetry();
+
   const { url } = await startStandaloneServer(server, {
     listen: { port, host: "0.0.0.0" },
     context: async ({ req }) => {

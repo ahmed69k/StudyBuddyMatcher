@@ -11,3 +11,13 @@ export const GET_ME = gql`
     }
   }
 `;
+
+/** Existing auth query — used for session participant labels (avoids SessionParticipant.username on subgraph schema). */
+export const GET_ALL_USERS_LABELS = gql`
+  query GetAllUsersLabels {
+    getAllUsers {
+      id
+      username
+    }
+  }
+`;

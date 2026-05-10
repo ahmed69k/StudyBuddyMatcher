@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation } from "@apollo/client/react";
+import { useMutation, useQuery } from "@apollo/client/react";
 import { CREATE_SESSION, MY_SESSIONS } from "../graphql/sessions";
+import {
+  MY_INCOMING_BUDDY_REQUESTS,
+  MY_OUTGOING_BUDDY_REQUESTS,
+} from "../graphql/matching";
+import { buildAcceptedBuddyIdSet } from "../lib/acceptedBuddyIds";
 import { useAuthUser } from "../hooks/useAuthUser";
 import PageHeader from "../components/ui/PageHeader";
 import Button from "../components/ui/Button";
@@ -11,6 +16,28 @@ import LinkButton from "../components/ui/LinkButton";
 export default function SessionCreatePage() {
   const navigate = useNavigate();
   const { user, loading: userLoading } = useAuthUser();
+
+  const { data: incomingBuddies } = useQuery(MY_INCOMING_BUDDY_REQUESTS, {
+    variables: { status: "ACCEPTED" },
+    skip: !user?.id,
+    fetchPolicy: "cache-first",
+  });
+  const { data: outgoingBuddies } = useQuery(MY_OUTGOING_BUDDY_REQUESTS, {
+    variables: { status: "ACCEPTED" },
+    skip: !user?.id,
+    fetchPolicy: "cache-first",
+  });
+
+  const inviteParticipantUserIds = useMemo(() => {
+    const set = buildAcceptedBuddyIdSet(
+      outgoingBuddies?.myOutgoingBuddyRequests,
+      incomingBuddies?.myIncomingBuddyRequests,
+    );
+    return Array.from(set);
+  }, [
+    incomingBuddies?.myIncomingBuddyRequests,
+    outgoingBuddies?.myOutgoingBuddyRequests,
+  ]);
 
   const [topic, setTopic] = useState("");
   const [description, setDescription] = useState("");
@@ -22,7 +49,51 @@ export default function SessionCreatePage() {
   const [createSession, { loading: saving, error }] = useMutation(
     CREATE_SESSION,
     {
-      refetchQueries: [{ query: MY_SESSIONS }],
+      /**
+       * Do not use `refetchQueries` for MySessions here: it can finish after this `update` and
+       * replace the cache with an empty list (stale gateway/cache), wiping the new session.
+       */
+      update(cache, { data }, { variables: mutVars }) {
+        const created = data?.createSession;
+        const uid = mutVars?.input?.creatorId;
+        if (!created?.id || !uid) return;
+        let list = [];
+        try {
+          const prev = cache.readQuery({
+            query: MY_SESSIONS,
+          });
+          list = prev?.sessions ?? [];
+        } catch {
+          list = [];
+        }
+        if (list.some((s) => s.id === created.id)) return;
+        const sessionForCache = {
+          __typename: "StudySession",
+          id: created.id,
+          topic: created.topic,
+          description: created.description ?? null,
+          dateTime: created.dateTime,
+          duration: created.duration,
+          sessionType: created.sessionType,
+          creatorId: created.creatorId,
+          contactInfo: created.contactInfo ?? null,
+          participants: (created.participants ?? []).map((p) => ({
+            __typename: "SessionParticipant",
+            id: p.id,
+            userId: p.userId,
+            joinedAt: p.joinedAt,
+          })),
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+          viewerIsHost: created.viewerIsHost ?? true,
+          viewerHasJoined: created.viewerHasJoined ?? true,
+          viewerInvitePending: created.viewerInvitePending ?? false,
+        };
+        cache.writeQuery({
+          query: MY_SESSIONS,
+          data: { sessions: [...list, sessionForCache] },
+        });
+      },
     },
   );
 
@@ -42,6 +113,7 @@ export default function SessionCreatePage() {
           sessionType,
           creatorId: user.id,
           contactInfo: contactInfo.trim() || null,
+          inviteParticipantUserIds,
         },
       },
     });
@@ -55,7 +127,7 @@ export default function SessionCreatePage() {
       <PageHeader
         eyebrow="Plan"
         title="Create study session"
-        description="Pick a topic, time, and format. Invite participants from your matches afterward."
+        description="Pick a topic, time, and format. Accepted study buddies get an invite—they choose when to join."
         action={
           <Link
             to="/sessions"
@@ -171,6 +243,12 @@ export default function SessionCreatePage() {
                 className="mt-2 w-full rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-white placeholder:text-violet-300/80 focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-400/50"
               />
             </div>
+
+            <p className="text-sm text-violet-200/90">
+              {inviteParticipantUserIds.length > 0
+                ? `Accepted study buddies (${inviteParticipantUserIds.length}) are added as participants so they see this session in their list and can leave if needed.`
+                : "When you have accepted study buddies, they are added automatically on create so everyone sees the same session."}
+            </p>
 
             <div className="flex justify-end gap-3 pt-4">
               <Link to="/sessions">

@@ -82,6 +82,26 @@ export const startConsumer = async (prisma) => {
         if (!sessionId) return;
 
         if (env.event === "StudySessionCreated") {
+          const participantIdsFromPayload = Array.isArray(payload.participantUserIds)
+            ? payload.participantUserIds.filter(Boolean)
+            : [];
+          const invitedIdsFromPayload = Array.isArray(payload.invitedUserIds)
+            ? payload.invitedUserIds.filter(Boolean)
+            : [];
+          const participantIds =
+            participantIdsFromPayload.length > 0 || invitedIdsFromPayload.length > 0
+              ? Array.from(
+                  new Set(
+                    [
+                      payload.creatorId,
+                      ...participantIdsFromPayload,
+                      ...invitedIdsFromPayload,
+                    ].filter(Boolean),
+                  ),
+                )
+              : payload.creatorId
+                ? [payload.creatorId]
+                : [];
           await prisma.sessionSnapshot.upsert({
             where: { id: sessionId },
             create: {
@@ -90,7 +110,7 @@ export const startConsumer = async (prisma) => {
               dateTime: payload.dateTime ? new Date(payload.dateTime) : new Date(),
               duration: payload.duration || 60,
               creatorId: payload.creatorId || "unknown",
-              participantIds: payload.creatorId ? [payload.creatorId] : [],
+              participantIds,
               cancelled: false,
             },
             update: {
@@ -98,7 +118,7 @@ export const startConsumer = async (prisma) => {
               dateTime: payload.dateTime ? new Date(payload.dateTime) : new Date(),
               duration: payload.duration || 60,
               creatorId: payload.creatorId || "unknown",
-              participantIds: payload.creatorId ? [payload.creatorId] : [],
+              participantIds,
               cancelled: false,
             },
           });

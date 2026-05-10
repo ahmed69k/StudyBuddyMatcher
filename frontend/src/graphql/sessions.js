@@ -1,70 +1,64 @@
 import { gql } from "@apollo/client";
 
+/** Fragment: session card + detail shared fields (viewer* from API). */
+export const STUDY_SESSION_FIELDS = gql`
+  fragment StudySessionFields on StudySession {
+    id
+    topic
+    description
+    dateTime
+    duration
+    sessionType
+    creatorId
+    contactInfo
+    participants {
+      id
+      userId
+      joinedAt
+    }
+    createdAt
+    updatedAt
+    viewerIsHost
+    viewerHasJoined
+    viewerInvitePending
+  }
+`;
+
+/** Uses JWT on the gateway; no userId variable so cache/refetch cannot drift from auth identity. */
 export const MY_SESSIONS = gql`
   query MySessions {
     sessions {
-      id
-      topic
-      description
-      dateTime
-      duration
-      sessionType
-      creatorId
-      contactInfo
-      participants {
-        id
-        userId
-        joinedAt
-      }
-      createdAt
-      updatedAt
+      ...StudySessionFields
     }
   }
+  ${STUDY_SESSION_FIELDS}
 `;
 
 export const CREATE_SESSION = gql`
   mutation CreateSession($input: CreateSessionInput!) {
     createSession(input: $input) {
-      id
-      topic
-      dateTime
-      duration
-      sessionType
+      ...StudySessionFields
     }
   }
+  ${STUDY_SESSION_FIELDS}
 `;
 
 export const JOIN_SESSION = gql`
   mutation JoinSession($sessionId: String!, $userId: String!) {
     joinSession(sessionId: $sessionId, userId: $userId) {
-      id
-      participants {
-        userId
-      }
+      ...StudySessionFields
     }
   }
+  ${STUDY_SESSION_FIELDS}
 `;
 
 export const GET_SESSION = gql`
   query Session($id: String!) {
     session(id: $id) {
-      id
-      topic
-      description
-      dateTime
-      duration
-      sessionType
-      creatorId
-      contactInfo
-      participants {
-        id
-        userId
-        joinedAt
-      }
-      createdAt
-      updatedAt
+      ...StudySessionFields
     }
   }
+  ${STUDY_SESSION_FIELDS}
 `;
 
 export const UPDATE_SESSION = gql`
@@ -78,6 +72,9 @@ export const UPDATE_SESSION = gql`
       sessionType
       contactInfo
       updatedAt
+      viewerIsHost
+      viewerHasJoined
+      viewerInvitePending
     }
   }
 `;
@@ -85,12 +82,10 @@ export const UPDATE_SESSION = gql`
 export const LEAVE_SESSION = gql`
   mutation LeaveSession($sessionId: String!, $userId: String!) {
     leaveSession(sessionId: $sessionId, userId: $userId) {
-      id
-      participants {
-        userId
-      }
+      ...StudySessionFields
     }
   }
+  ${STUDY_SESSION_FIELDS}
 `;
 
 export const CANCEL_SESSION = gql`
