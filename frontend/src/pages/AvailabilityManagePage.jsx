@@ -11,6 +11,10 @@ import {
 import PageHeader from "../components/ui/PageHeader";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
+import {
+  findAvailabilityConflict,
+  availabilityConflictMessage,
+} from "../lib/availabilitySlots";
 
 const DAYS = [
   "Monday",
@@ -36,6 +40,14 @@ function sortSlots(list) {
 
 function formatSlot(s) {
   return `${s.dayOfWeek} · ${s.startHour}:00–${s.endHour}:00`;
+}
+
+function mutationErrorMessage(err) {
+  const gql = err?.graphQLErrors?.[0]?.message;
+  if (gql) return gql;
+  const nested = err?.networkError?.result?.errors?.[0]?.message;
+  if (nested) return nested;
+  return err?.message || "Something went wrong";
 }
 
 export default function AvailabilityManagePage() {
@@ -78,6 +90,11 @@ export default function AvailabilityManagePage() {
       toast.error("End time must be after start time.");
       return;
     }
+    const conflict = findAvailabilityConflict(slots, day, startHour, endHour);
+    if (conflict) {
+      toast.error(availabilityConflictMessage(day, startHour, endHour, conflict));
+      return;
+    }
     setBusy(true);
     try {
       await addSlot({
@@ -90,7 +107,7 @@ export default function AvailabilityManagePage() {
       toast.success("Availability slot added. Matching will refresh from this schedule.");
       await refetch();
     } catch (err) {
-      toast.error(err.message || "Could not add slot");
+      toast.error(mutationErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -99,6 +116,11 @@ export default function AvailabilityManagePage() {
   const handleSaveEdit = async (id) => {
     if (editStart >= editEnd) {
       toast.error("End time must be after start time.");
+      return;
+    }
+    const conflict = findAvailabilityConflict(slots, editDay, editStart, editEnd, id);
+    if (conflict) {
+      toast.error(availabilityConflictMessage(editDay, editStart, editEnd, conflict));
       return;
     }
     setBusy(true);
@@ -117,7 +139,7 @@ export default function AvailabilityManagePage() {
       setEditingId(null);
       await refetch();
     } catch (err) {
-      toast.error(err.message || "Could not update slot");
+      toast.error(mutationErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -132,7 +154,7 @@ export default function AvailabilityManagePage() {
       if (editingId === id) setEditingId(null);
       await refetch();
     } catch (err) {
-      toast.error(err.message || "Could not delete slot");
+      toast.error(mutationErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -171,7 +193,8 @@ export default function AvailabilityManagePage() {
 
         <h2 className="text-base font-bold text-slate-900">Your slots</h2>
         <p className="mt-1 text-sm text-slate-600">
-          You can add several slots per week. Overlapping entries on the same day are blocked.
+          You can add several slots per week. The same slot twice isn’t allowed, and overlapping times on one day are
+          blocked (you’ll see a clear error).
         </p>
 
         {loading && !data ? (
