@@ -1,5 +1,11 @@
+import { useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 import { GET_ME } from "../../graphql/user";
+import {
+  MY_INCOMING_BUDDY_REQUESTS,
+  MY_OUTGOING_BUDDY_REQUESTS,
+} from "../../graphql/matching";
+import { buildAcceptedBuddyIdSet } from "../../lib/acceptedBuddyIds";
 import { useNavigate } from "react-router-dom";
 import { FiSettings } from "react-icons/fi";
 import Loading from "../../components/ui/Loading";
@@ -25,9 +31,33 @@ function StatCard({ label, value }) {
 }
 
 export default function ProfilePage() {
-  const { data, loading, error, refetch } = useQuery(GET_ME, {
+  const { data, loading, error } = useQuery(GET_ME, {
     fetchPolicy: "cache-and-network",
   });
+
+  /** Same queries / variables as Matching — stays in sync when buddy requests change (shared Apollo cache). */
+  const { data: incBuddyData, loading: incBuddyLoading } = useQuery(
+    MY_INCOMING_BUDDY_REQUESTS,
+    { fetchPolicy: "cache-and-network" },
+  );
+  const { data: outBuddyData, loading: outBuddyLoading } = useQuery(
+    MY_OUTGOING_BUDDY_REQUESTS,
+    { fetchPolicy: "cache-and-network" },
+  );
+
+  const studyBuddyCount = useMemo(
+    () =>
+      buildAcceptedBuddyIdSet(
+        outBuddyData?.myOutgoingBuddyRequests,
+        incBuddyData?.myIncomingBuddyRequests,
+      ).size,
+    [
+      outBuddyData?.myOutgoingBuddyRequests,
+      incBuddyData?.myIncomingBuddyRequests,
+    ],
+  );
+
+  const buddyStatsLoading = incBuddyLoading || outBuddyLoading;
 
   const navigate = useNavigate();
   const user = data?.me;
@@ -113,7 +143,10 @@ export default function ProfilePage() {
 
           {/* QUICK STATS */}
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <StatCard label="Friends" value={user.friends?.length} />
+            <StatCard
+              label="Friends"
+              value={buddyStatsLoading ? null : studyBuddyCount}
+            />
             <StatCard label="ID" value={user.id?.slice(0, 6)} />
           </div>
         </div>

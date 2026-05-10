@@ -46,6 +46,10 @@ const typeDefs = `#graphql
     id: ID!
     requesterId: String!
     receiverId: String!
+    """Display name from the matching profile (not raw user id)."""
+    requesterName: String!
+    """Display name from the matching profile (not raw user id)."""
+    receiverName: String!
     status: BuddyRequestStatus!
     message: String
     createdAt: String!

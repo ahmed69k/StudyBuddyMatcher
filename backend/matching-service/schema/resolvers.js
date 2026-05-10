@@ -127,7 +127,55 @@ const profileDisplayName = (profile) => {
   return n || "Someone";
 };
 
+/**
+ * Batch-loads display names so list queries return complete rows in one subgraph round-trip
+ * (avoids stitched-gateway quirks with nested non-null field resolution).
+ */
+const enrichBuddyRequestsWithDisplayNames = async (prisma, rows) => {
+  const mapped = rows.map(mapBuddyRequest);
+  const ids = [...new Set(mapped.flatMap((r) => [r.requesterId, r.receiverId]))];
+  if (ids.length === 0) return mapped;
+  const profiles = await prisma.userProfile.findMany({
+    where: { userId: { in: ids } },
+    select: { userId: true, name: true },
+  });
+  const nameByUserId = new Map(profiles.map((p) => [p.userId, profileDisplayName(p)]));
+  return mapped.map((r) => ({
+    ...r,
+    requesterName: nameByUserId.get(r.requesterId) ?? "Someone",
+    receiverName: nameByUserId.get(r.receiverId) ?? "Someone",
+  }));
+};
+
 const resolvers = {
+  BuddyRequest: {
+    requesterName: async (parent, _, context) => {
+      if (typeof parent.requesterName === "string") return parent.requesterName;
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const uid = context.user.id;
+      if (parent.requesterId !== uid && parent.receiverId !== uid) {
+        throw new Error("Not authorized");
+      }
+      const profile = await prisma.userProfile.findUnique({
+        where: { userId: parent.requesterId },
+      });
+      return profileDisplayName(profile);
+    },
+    receiverName: async (parent, _, context) => {
+      if (typeof parent.receiverName === "string") return parent.receiverName;
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const uid = context.user.id;
+      if (parent.requesterId !== uid && parent.receiverId !== uid) {
+        throw new Error("Not authorized");
+      }
+      const profile = await prisma.userProfile.findUnique({
+        where: { userId: parent.receiverId },
+      });
+      return profileDisplayName(profile);
+    },
+  },
   Query: {
     /** Returns one `UserProfile` row for the given id; caller must be that user. */
     userProfile: async (_, { userId }, context) => {
@@ -173,7 +221,8 @@ const resolvers = {
       if (row.requesterId !== uid && row.receiverId !== uid) {
         throw new Error("Not authorized");
       }
-      return mapBuddyRequest(row);
+      const [enriched] = await enrichBuddyRequestsWithDisplayNames(prisma, [row]);
+      return enriched;
     },
     /** Buddy requests where the current user is the receiver; optional filter by status. */
     myIncomingBuddyRequests: async (_, { status }, context) => {
@@ -185,7 +234,7 @@ const resolvers = {
         where,
         orderBy: { createdAt: "desc" },
       });
-      return rows.map(mapBuddyRequest);
+      return enrichBuddyRequestsWithDisplayNames(prisma, rows);
     },
     /** Buddy requests sent by the current user; optional filter by status. */
     myOutgoingBuddyRequests: async (_, { status }, context) => {
@@ -197,7 +246,7 @@ const resolvers = {
         where,
         orderBy: { createdAt: "desc" },
       });
-      return rows.map(mapBuddyRequest);
+      return enrichBuddyRequestsWithDisplayNames(prisma, rows);
     },
   },
   Mutation: {
