@@ -3,43 +3,98 @@ import { publishDomainEvent, publishNotification, publishBuddyRequestEvent } fro
 /** Clamps the raw heuristic sum to an integer percentage in 0–100 for display and thresholds. */
 const normalizeScore = (raw) => Math.max(0, Math.min(100, Math.round(raw)));
 
+/** Trim + lowercase for comparing labels (courses, topics, string prefs). */
+const normLabel = (s) => {
+  const t = String(s ?? "").trim().toLowerCase();
+  return t === "" ? null : t;
+};
+
+/** Collapse whitespace for comparing availability slot strings produced by Kafka (`Monday 14-17`). */
+const normAvailabilityKey = (s) => {
+  const t = String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  return t === "" ? null : t;
+};
+
 /**
- * Core matching logic: scores two `UserProfile` rows from shared courses/topics/availability and study prefs;
- * returns a capped score plus human-readable `reasons` for the UI or evaluation demo.
+ * Matching compatibility (single source of truth for `recommendMatches`, buddy-request threshold, and Kafka top-match).
+ *
+ * Uses all profile dimensions required for study-buddy matching:
+ * 1. **Courses** — intersection of course lists (weighted per shared course).
+ * 2. **Topics** — intersection of topic lists.
+ * 3. **Availability** — intersection of weekly slot strings (`UserProfile.availability`), synced from availability-service via Kafka.
+ * 4. **Study preferences** — `studyPace`, `studyMode`, `studyStyle` (equality bonuses) and `preferredGroupSize` (closer = higher partial score).
+ *
+ * Returns a 0–100 integer score and human-readable `reasons` for the UI.
  */
 const computeCompatibility = (a, b) => {
   let score = 0;
   const reasons = [];
 
-  const sharedCourses = a.courses.filter((c) => b.courses.includes(c));
+  const courseKeysSeen = new Set();
+  const sharedCourses = [];
+  for (const c of a.courses ?? []) {
+    const k = normLabel(c);
+    if (!k || courseKeysSeen.has(k)) continue;
+    courseKeysSeen.add(k);
+    if ((b.courses ?? []).some((x) => normLabel(x) === k)) {
+      sharedCourses.push(String(c).trim());
+    }
+  }
   if (sharedCourses.length > 0) {
     score += sharedCourses.length * 8;
     reasons.push(`Shared course(s): ${sharedCourses.join(", ")}`);
   }
 
-  const sharedTopics = a.topics.filter((t) => b.topics.includes(t));
+  const topicKeysSeen = new Set();
+  const sharedTopics = [];
+  for (const t of a.topics ?? []) {
+    const k = normLabel(t);
+    if (!k || topicKeysSeen.has(k)) continue;
+    topicKeysSeen.add(k);
+    if ((b.topics ?? []).some((x) => normLabel(x) === k)) {
+      sharedTopics.push(String(t).trim());
+    }
+  }
   if (sharedTopics.length > 0) {
     score += sharedTopics.length * 5;
     reasons.push(`Shared topic(s): ${sharedTopics.join(", ")}`);
   }
 
-  const sharedAvailability = a.availability.filter((u) => b.availability.includes(u));
+  const bAvailByKey = new Map();
+  for (const u of b.availability ?? []) {
+    const key = normAvailabilityKey(u);
+    if (key && !bAvailByKey.has(key)) bAvailByKey.set(key, String(u).trim());
+  }
+  const sharedAvailability = [];
+  const availKeysSeen = new Set();
+  for (const u of a.availability ?? []) {
+    const key = normAvailabilityKey(u);
+    if (!key || availKeysSeen.has(key)) continue;
+    availKeysSeen.add(key);
+    if (bAvailByKey.has(key)) sharedAvailability.push(String(u).trim());
+  }
   if (sharedAvailability.length > 0) {
     score += sharedAvailability.length * 4;
     reasons.push(`Overlapping availability: ${sharedAvailability.join(", ")}`);
   }
 
-  if (a.studyPace && b.studyPace && a.studyPace === b.studyPace) {
+  const paceA = normLabel(a.studyPace);
+  const paceB = normLabel(b.studyPace);
+  if (paceA && paceB && paceA === paceB) {
     score += 12;
     reasons.push(`Same study pace: ${a.studyPace}`);
   }
 
-  if (a.studyMode && b.studyMode && a.studyMode === b.studyMode) {
+  const modeA = normLabel(a.studyMode);
+  const modeB = normLabel(b.studyMode);
+  if (modeA && modeB && modeA === modeB) {
     score += 12;
     reasons.push(`Same study mode: ${a.studyMode}`);
   }
 
-  if (a.studyStyle && b.studyStyle && a.studyStyle === b.studyStyle) {
+  const styleA = normLabel(a.studyStyle);
+  const styleB = normLabel(b.studyStyle);
+  if (styleA && styleB && styleA === styleB) {
     score += 7;
     reasons.push(`Same study style: ${a.studyStyle}`);
   }
