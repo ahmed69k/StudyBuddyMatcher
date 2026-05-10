@@ -12,6 +12,5 @@ RUN npx prisma generate
 
 EXPOSE 3004
 
-# Optional at runtime: set PORT via env
 CMD ["npm", "run", "start"]
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@apollo/client/react";
 import {
@@ -9,15 +9,23 @@ import {
   CANCEL_SESSION,
   MY_SESSIONS,
 } from "../graphql/sessions";
+import { GET_ALL_USERS_LABELS } from "../graphql/auth";
 import { useAuthUser } from "../hooks/useAuthUser";
 import PageHeader from "../components/ui/PageHeader";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 
-function parseIso(iso) {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d;
+function parseIso(raw) {
+  if (raw == null || raw === "") return null;
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (Number.isFinite(n)) {
+    const d2 = new Date(n);
+    return Number.isNaN(d2.getTime()) ? null : d2;
+  }
+  return null;
 }
 
 function toDatetimeLocalValue(iso) {
@@ -40,6 +48,23 @@ export default function SessionDetailPage() {
   });
 
   const session = data?.session;
+
+  const { data: labelsData, loading: labelsLoading } = useQuery(
+    GET_ALL_USERS_LABELS,
+    {
+      skip: !(session?.participants?.length > 0),
+      fetchPolicy: "cache-first",
+    },
+  );
+
+  const nameById = useMemo(() => {
+    const m = new Map();
+    for (const u of labelsData?.getAllUsers ?? []) {
+      if (u?.id != null && u?.username != null) m.set(String(u.id), u.username);
+    }
+    return m;
+  }, [labelsData?.getAllUsers]);
+
   const errMsg =
     error?.graphQLErrors?.map((e) => e.message).join(" ") ||
     error?.message ||
@@ -48,22 +73,30 @@ export default function SessionDetailPage() {
   const isForbidden =
     errMsg.includes("Not authorized") || errMsg.includes("authorized");
 
+  const refetchMySessions = useMemo(
+    () =>
+      user?.id
+        ? [{ query: MY_SESSIONS, fetchPolicy: "network-only" }]
+        : [],
+    [user?.id],
+  );
+
   const [joinSession, { loading: joining }] = useMutation(JOIN_SESSION, {
     refetchQueries: [
       { query: GET_SESSION, variables: { id: sessionId } },
-      { query: MY_SESSIONS },
+      ...refetchMySessions,
     ],
   });
 
   const [leaveSession, { loading: leaving }] = useMutation(LEAVE_SESSION, {
-    refetchQueries: [{ query: MY_SESSIONS }],
+    refetchQueries: refetchMySessions,
     onCompleted: () => navigate("/sessions"),
   });
 
   const [cancelSession, { loading: cancelling }] = useMutation(
     CANCEL_SESSION,
     {
-      refetchQueries: [{ query: MY_SESSIONS }],
+      refetchQueries: refetchMySessions,
       onCompleted: () => navigate("/sessions"),
     },
   );
@@ -71,7 +104,7 @@ export default function SessionDetailPage() {
   const [updateSession, { loading: updating }] = useMutation(UPDATE_SESSION, {
     refetchQueries: [
       { query: GET_SESSION, variables: { id: sessionId } },
-      { query: MY_SESSIONS },
+      ...refetchMySessions,
     ],
   });
 
@@ -94,10 +127,18 @@ export default function SessionDetailPage() {
   }, [session]);
 
   const meId = user?.id;
-  const isCreator = meId && session?.creatorId === meId;
-  const isParticipant =
-    meId &&
-    session?.participants?.some((p) => p.userId === meId);
+
+  const participantDisplayName = (participant) => {
+    const uid = String(participant.userId);
+    const fromList = (nameById.get(uid) ?? "").trim();
+    if (fromList) return fromList;
+    if (meId && uid === String(meId) && user?.username) return user.username;
+    return null;
+  };
+
+  const viewerIsHost = !!(meId && session?.viewerIsHost);
+  const viewerHasJoined = !!(meId && session?.viewerHasJoined);
+  const viewerInvitePending = !!(meId && session?.viewerInvitePending);
 
   const handleJoin = async () => {
     if (!sessionId || !meId) return;
@@ -152,30 +193,16 @@ export default function SessionDetailPage() {
     return (
       <div className="mx-auto max-w-lg px-4 pb-24 pt-10">
         <PageHeader
-          eyebrow="Invite"
-          title="Join this session"
-          description="You’re not in this session yet. After joining, you’ll see full details and can coordinate with the host."
+          eyebrow="Session"
+          title="No access"
+          description="This session exists, but you don’t have an invite. Ask the host to add you as a study buddy invite, or open it from your Sessions list after you’re invited."
         />
         <Card className="p-8 text-center">
-          <p className="text-sm text-slate-600">
-            Session ID:{" "}
-            <code className="rounded bg-slate-100 px-2 py-0.5 text-xs">
-              {sessionId}
-            </code>
-          </p>
-          <Button
-            type="button"
-            className="mt-6 w-full px-6 py-3"
-            disabled={joining}
-            onClick={handleJoin}
-          >
-            {joining ? "Joining…" : "Join session"}
-          </Button>
           <Link
             to="/sessions"
-            className="mt-4 inline-block text-sm font-semibold text-violet-700 hover:underline"
+            className="inline-block text-sm font-semibold text-violet-700 hover:underline"
           >
-            Back to sessions
+            ← Back to sessions
           </Link>
         </Card>
       </div>
@@ -237,12 +264,33 @@ export default function SessionDetailPage() {
         <Badge tone={session.sessionType === "ONLINE" ? "violet" : "teal"}>
           {session.sessionType === "ONLINE" ? "Online" : "In person"}
         </Badge>
-        {isCreator ? (
+        {viewerIsHost ? (
           <Badge tone="amber">You’re the host</Badge>
-        ) : isParticipant ? (
-          <Badge tone="emerald">Participant</Badge>
+        ) : viewerInvitePending ? (
+          <Badge tone="violet">Invited — join to participate</Badge>
+        ) : viewerHasJoined ? (
+          <Badge tone="emerald">Joined</Badge>
         ) : null}
       </div>
+
+      {viewerInvitePending ? (
+        <Card className="mb-6 border border-violet-200 bg-violet-50/80 p-6">
+          <p className="text-sm font-semibold text-violet-900">
+            You’re invited to this session
+          </p>
+          <p className="mt-2 text-sm text-violet-800">
+            Join to see the meeting link or location and appear in the participant list.
+          </p>
+          <Button
+            type="button"
+            className="mt-4 px-6 py-3"
+            disabled={joining}
+            onClick={handleJoin}
+          >
+            {joining ? "Joining…" : "Join session"}
+          </Button>
+        </Card>
+      ) : null}
 
       {session.description ? (
         <Card className="mb-6 p-6">
@@ -275,21 +323,25 @@ export default function SessionDetailPage() {
       <Card className="mb-6 p-6">
         <h2 className="text-sm font-bold text-violet-800">Participants</h2>
         <ul className="mt-3 space-y-2 text-sm text-slate-700">
-          {(session.participants ?? []).map((p) => (
+          {(session.participants ?? []).map((p) => {
+            const resolved = participantDisplayName(p);
+            const label = resolved ?? (labelsLoading ? "…" : "Unknown user");
+            return (
             <li key={p.id} className="flex justify-between gap-2">
-              <span className="font-mono text-xs">
-                {p.userId === session.creatorId ? "Host · " : ""}
-                {p.userId}
+              <span className="text-sm text-slate-800">
+                {String(p.userId) === String(session.creatorId) ? "Host · " : ""}
+                {label}
               </span>
               <span className="text-slate-400">
                 {parseIso(p.joinedAt)?.toLocaleDateString()}
               </span>
             </li>
-          ))}
+          );
+          })}
         </ul>
       </Card>
 
-      {isCreator ? (
+      {viewerIsHost ? (
         <>
           {!editing ? (
             <div className="flex flex-wrap gap-3">
@@ -414,7 +466,7 @@ export default function SessionDetailPage() {
             </Card>
           )}
         </>
-      ) : isParticipant ? (
+      ) : viewerHasJoined && !viewerIsHost ? (
         <Button
           type="button"
           variant="secondary"
