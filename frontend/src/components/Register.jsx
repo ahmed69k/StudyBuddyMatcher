@@ -1,6 +1,12 @@
+// -- change menna — Register: visible errors, toast, redirect after signup, SPA login link (rollback: follow ORIGINAL comments below)
 import { gql } from "@apollo/client";
-import { useQuery, useMutation } from "@apollo/client/react";
+import { useMutation } from "@apollo/client/react";
+// ORIGINAL: import { useQuery, useMutation } from "@apollo/client/react";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+// ORIGINAL: no import from "react-router-dom"
+import toast from "react-hot-toast";
+// ORIGINAL: no "react-hot-toast" import
 
 const REGISTER = gql`
     mutation Register($input: createUserInput!){
@@ -8,10 +14,30 @@ const REGISTER = gql`
             username
         }
     }
-`
+`;
+
+// -- change menna — maps Apollo/network errors to user-facing text (rollback: delete entire function)
+// ORIGINAL: (no helper — errors were only console.log in catch)
+function registerErrorMessage(err) {
+    if (!err) return "Something went wrong.";
+    const net = err.networkError;
+    if (net) {
+        const msg = net.message || "";
+        if (msg.includes("Failed to fetch") || net.statusCode === 0) {
+            return "Cannot reach the API. Start the GraphQL gateway (port 4001) and backend, then try again.";
+        }
+        return msg || "Network error.";
+    }
+    const gqlErr = err.graphQLErrors?.[0];
+    if (gqlErr?.message) return gqlErr.message;
+    return err.message || "Registration failed.";
+}
 
 export default function Register(){
-    const [register] = useMutation(REGISTER);
+    // -- change menna — navigate after success; loading from mutation; formError state (rollback: remove navigate, formError, and { loading } below)
+    const navigate = useNavigate();
+    const [register, { loading }] = useMutation(REGISTER);
+    // ORIGINAL: const [register] = useMutation(REGISTER);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [username, setUsername] = useState("");
@@ -19,29 +45,61 @@ export default function Register(){
     const [academicYear, setAcademicYear] = useState("");
     const [phoneNumber, setPhoneNumber] = useState("");
     const [profilePicture, setProfilePicture] = useState("");
+    const [formError, setFormError] = useState("");
+    // ORIGINAL: (no formError state)
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        try{
+        // -- change menna — full submit handler (rollback: replace entire function body with ORIGINAL block below)
+        // ORIGINAL handleSubmit body:
+        // try {
+        //   await register({
+        //     variables: {
+        //       input: {
+        //         email,
+        //         password,
+        //         username,
+        //         university,
+        //         academicYear: Number(academicYear),
+        //         phoneNumber,
+        //         profilePicture,
+        //       },
+        //     },
+        //   });
+        //   console.log("User added successfully!");
+        // } catch (err) {
+        //   console.log(err);
+        // }
+        setFormError("");
+        const yearNum = Number(academicYear);
+        if (!academicYear || Number.isNaN(yearNum)) {
+            const msg = "Please select an academic year.";
+            setFormError(msg);
+            toast.error(msg);
+            return;
+        }
+        try {
             await register({
-                variables:{
-                    input:{
-                        email,
+                variables: {
+                    input: {
+                        email: email.trim(),
                         password,
-                        username,
-                        university,
-                        academicYear: Number(academicYear),
-                        phoneNumber,
-                        profilePicture
-                    }
-                }
-            })
-            console.log("User added successfully!");
+                        username: username.trim(),
+                        university: university.trim() || undefined,
+                        academicYear: yearNum,
+                        phoneNumber: phoneNumber.trim() || undefined,
+                        profilePicture: profilePicture.trim() || undefined,
+                    },
+                },
+            });
+            toast.success("Account created. You can sign in now.");
+            navigate("/login");
+        } catch (err) {
+            const msg = registerErrorMessage(err);
+            setFormError(msg);
+            toast.error(msg);
         }
-        catch(err){
-            console.log(err)
-        }
-    }
+    };
 
     // Generate academic years from 2026 to 2036
     const currentYear = 2026;
@@ -60,6 +118,15 @@ export default function Register(){
 
                 {/* Form Card */}
                 <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-8 space-y-5">
+                    {/* -- change menna — inline error banner (rollback: remove this whole conditional) */}
+                    {formError ? (
+                        <p
+                            className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+                            role="alert"
+                        >
+                            {formError}
+                        </p>
+                    ) : null}
                     {/* Email Input */}
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -182,19 +249,38 @@ export default function Register(){
                     </div>
 
                     {/* Submit Button */}
-                    <button 
-                        type="submit" 
+                    {/* -- change menna — disabled + loading label while mutation runs (rollback: restore ORIGINAL button only) */}
+                    {/* ORIGINAL:
+                    <button
+                        type="submit"
                         className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200 mt-6"
                     >
                         Create Account
                     </button>
+                    */}
+                    <button 
+                        type="submit" 
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 rounded-xl hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200 mt-6 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                        {loading ? "Creating account…" : "Create Account"}
+                    </button>
 
                     {/* Login Link */}
+                    {/* -- change menna — SPA navigation (rollback: restore ORIGINAL <a href>) */}
+                    {/* ORIGINAL:
                     <p className="text-center text-sm text-gray-600 mt-4">
-                        Already have an account?{' '}
+                        Already have an account?{" "}
                         <a href="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
                             Sign in
                         </a>
+                    </p>
+                    */}
+                    <p className="text-center text-sm text-gray-600 mt-4">
+                        Already have an account?{" "}
+                        <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+                            Sign in
+                        </Link>
                     </p>
                 </form>
             </div>

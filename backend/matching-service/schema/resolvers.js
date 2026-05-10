@@ -120,6 +120,13 @@ const mapBuddyRequest = (row) => ({
   updatedAt: toIso(row.updatedAt),
 });
 
+/** Display name from matching `UserProfile` for notifications (not raw `userId`). */
+const profileDisplayName = (profile) => {
+  if (!profile) return "Someone";
+  const n = profile.name != null ? String(profile.name).trim() : "";
+  return n || "Someone";
+};
+
 const resolvers = {
   Query: {
     /** Returns one `UserProfile` row for the given id; caller must be that user. */
@@ -266,15 +273,30 @@ const resolvers = {
         }
       }
 
-      const pendingSameDirection = await prisma.buddyRequest.findFirst({
+      const alreadyBuddies = await prisma.buddyRequest.findFirst({
         where: {
-          requesterId,
-          receiverId,
-          status: "PENDING",
+          status: "ACCEPTED",
+          OR: [
+            { requesterId, receiverId },
+            { requesterId: receiverId, receiverId: requesterId },
+          ],
         },
       });
-      if (pendingSameDirection) {
-        throw new Error("You already have a pending request to this user");
+      if (alreadyBuddies) {
+        throw new Error("You are already study buddies with this user.");
+      }
+
+      const pendingBetweenPair = await prisma.buddyRequest.findFirst({
+        where: {
+          status: "PENDING",
+          OR: [
+            { requesterId, receiverId },
+            { requesterId: receiverId, receiverId: requesterId },
+          ],
+        },
+      });
+      if (pendingBetweenPair) {
+        throw new Error("A pending buddy request already exists between you and this user.");
       }
 
       const created = await prisma.buddyRequest.create({
@@ -295,7 +317,7 @@ const resolvers = {
       await publishNotification({
         recipient: receiverId,
         subject: "New buddy request",
-        message: `User ${requesterId} sent you a study buddy request.`,
+        message: `${profileDisplayName(requesterProfile)} sent you a study buddy request.`,
       });
 
       return mapBuddyRequest(created);
@@ -325,17 +347,22 @@ const resolvers = {
         status: updated.status,
       });
 
+      const receiverProfileForNote = await prisma.userProfile.findUnique({
+        where: { userId: updated.receiverId },
+      });
+      const receiverLabel = profileDisplayName(receiverProfileForNote);
+
       if (nextStatus === "ACCEPTED") {
         await publishNotification({
           recipient: updated.requesterId,
           subject: "Buddy request accepted",
-          message: `User ${updated.receiverId} accepted your study buddy request.`,
+          message: `${receiverLabel} accepted your study buddy request.`,
         });
       } else {
         await publishNotification({
           recipient: updated.requesterId,
           subject: "Buddy request declined",
-          message: `User ${updated.receiverId} declined your study buddy request.`,
+          message: `${receiverLabel} declined your study buddy request.`,
         });
       }
 
@@ -363,10 +390,14 @@ const resolvers = {
         status: updated.status,
       });
 
+      const requesterProfileForNote = await prisma.userProfile.findUnique({
+        where: { userId: updated.requesterId },
+      });
+
       await publishNotification({
         recipient: updated.receiverId,
         subject: "Buddy request withdrawn",
-        message: `User ${updated.requesterId} cancelled their study buddy request.`,
+        message: `${profileDisplayName(requesterProfileForNote)} cancelled their study buddy request.`,
       });
 
       return mapBuddyRequest(updated);

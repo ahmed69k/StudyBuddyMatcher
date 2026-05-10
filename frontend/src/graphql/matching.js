@@ -1,5 +1,24 @@
 import { gql } from "@apollo/client";
 
+/** Matching-service copy of the user (includes `availability` synced from availability-management via Kafka). */
+export const GET_USER_PROFILE_MATCHING = gql`
+  query UserProfileForMatching($userId: String!) {
+    userProfile(userId: $userId) {
+      userId
+      name
+      email
+      courses
+      topics
+      studyPace
+      studyMode
+      preferredGroupSize
+      studyStyle
+      availability
+      updatedAt
+    }
+  }
+`;
+
 export const RECOMMEND_MATCHES = gql`
   query RecommendMatches($userId: String!, $maxResults: Int) {
     recommendMatches(userId: $userId, maxResults: $maxResults) {

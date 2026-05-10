@@ -23,20 +23,30 @@ services:
   user-and-auth-service:
     build: ./user-and-auth-service
     ports:
+      # -- change menna — host mapping (rollback: comment out next line, uncomment ORIGINAL)
       # ORIGINAL: - "3000:3000"
       # EDIT: Host 3007 avoids bind errors when something (e.g. local node) already uses 3000; in-network URL stays :3000
       - "3007:3000"
     env_file:
       - ./user-and-auth-service/.env
     # EDIT: ensures gateway waits for auth readiness before schema stitching
+    # Apollo rejects bare GET /; probe a trivial GraphQL GET + CSRF header (see Apollo CSRF prevention).
+    # -- change menna — healthcheck (rollback: comment out the 5 active lines below, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna — delete # prefixes on these 4 lines to revert; comment out active test/interval/timeout/retries/start_period below):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   # ORIGINAL: PROFILE SERVICE NOT LISTED IN COMPOSE
   # EDIT: PROFILE SERVICE ADDED FOR GATEWAY / COMPOSE NETWORK
+  # -- change menna — entire profile-and-study-preferences-service block added (rollback: comment out whole service from name through its healthcheck end, before notification-service)
   profile-and-study-preferences-service:
     depends_on:
       - kafka
@@ -45,17 +55,25 @@ services:
       - "3001:3001"
     environment:
       KAFKA_BROKER: kafka:9092
+      # -- change menna — PORT in environment (rollback: comment out next line if app used default-only)
       # ORIGINAL: NO PORT KEY HERE (ONLY KAFKA_BROKER)
       # EDIT: PORT MUST MATCH APP LISTEN PORT IN CONTAINER
       PORT: "3001"
     env_file:
       - ./profile-and-study-preferences-service/.env
     # EDIT: ensures gateway waits for profile readiness
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   notification-service:
     depends_on:
@@ -69,11 +87,18 @@ services:
     env_file:
       - ./notification-service/.env
     # EDIT: FIX gateway missing notifications issue (stitch wait)
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3005', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:3005', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3005/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   matching-service:
     depends_on:
@@ -88,11 +113,18 @@ services:
       - path: ./matching-service/.env
         required: false
     # EDIT: gateway schema safety
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3003/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   study-session-scheduling-service:
     depends_on:
@@ -107,11 +139,18 @@ services:
       - path: ./study-session-scheduling-service/.env
         required: false
     # EDIT: ensures stable stitching
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:3004', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3004/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   feedback-trust-service:
     depends_on:
@@ -127,11 +166,18 @@ services:
       - path: ./feedback-trust-service/.env
         required: false
     # EDIT: gateway readiness guarantee
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4010', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:4010', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4010/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   messaging-service:
     build: ./messaging-service
@@ -141,11 +187,18 @@ services:
     env_file:
       - ./messaging-service/.env
     # EDIT: ensures messaging schema is ready before gateway stitch
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8000', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:8000', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8000/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   availability-management-service:
     depends_on:
@@ -160,11 +213,18 @@ services:
       - path: ./availability-management-service/.env
         required: false
     # EDIT: required for stable gateway schema stitching
+    # -- change menna — healthcheck (rollback: comment active 5 lines, uncomment ORIGINAL block)
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002', r=>process.exit(r.statusCode===200?0:1))"]
+      # ORIGINAL healthcheck (menna):
+      # test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002', r=>process.exit(r.statusCode===200?0:1))"]
+      # interval: 5s
+      # timeout: 3s
+      # retries: 10
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3002/?query=%7B__typename%7D',{headers:{'apollo-require-preflight':'true'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
   graphql-gateway:
     build: ./graphql-gateway
@@ -172,6 +232,7 @@ services:
       - "4001:4001"
 
     # EDIT: CRITICAL FIX — wait for ALL services to actually be ready
+    # -- change menna — depends_on with service_healthy (rollback: replace with simple `depends_on: [service names]` without conditions if an older compose style is needed)
     depends_on:
       user-and-auth-service:
         condition: service_healthy
@@ -192,6 +253,7 @@ services:
 
     environment:
       PORT: "4001"
+      # -- change menna — subgraph URLs for gateway (rollback: adjust hostnames/ports if services move)
       # Service hostname + container listen port (3000). Host browser: http://localhost:3007/
       AUTH_GRAPHQL_URL: http://user-and-auth-service:3000/
       PROFILE_GRAPHQL_URL: http://profile-and-study-preferences-service:3001/

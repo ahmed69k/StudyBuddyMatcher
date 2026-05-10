@@ -1,16 +1,20 @@
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@apollo/client/react";
+import toast from "react-hot-toast";
 import {
   RECOMMEND_MATCHES,
   SEND_BUDDY_REQUEST,
   MY_OUTGOING_BUDDY_REQUESTS,
+  MY_INCOMING_BUDDY_REQUESTS,
 } from "../graphql/matching";
 import { useAuthUser } from "../hooks/useAuthUser";
 import BuddyRequestsPanel from "../components/matching/BuddyRequestsPanel";
 import MatchRecommendationCard from "../components/matching/MatchRecommendationCard";
 import Button from "../components/ui/Button";
 import PageHeader from "../components/ui/PageHeader";
+import { canSendBuddyRequest, buddyRequestMinCompatibilityScore } from "../lib/buddyRequestThreshold";
+import { buildAcceptedBuddyIdSet } from "../lib/acceptedBuddyIds";
 
 export default function MatchingPage() {
   const { user, loading: userLoading } = useAuthUser();
@@ -31,8 +35,15 @@ export default function MatchingPage() {
     fetchPolicy: "cache-and-network",
   });
 
+  const { data: incData } = useQuery(MY_INCOMING_BUDDY_REQUESTS, {
+    fetchPolicy: "cache-and-network",
+  });
+
   const [sendRequest] = useMutation(SEND_BUDDY_REQUEST, {
-    refetchQueries: [{ query: MY_OUTGOING_BUDDY_REQUESTS }],
+    refetchQueries: [
+      { query: MY_OUTGOING_BUDDY_REQUESTS },
+      { query: MY_INCOMING_BUDDY_REQUESTS },
+    ],
   });
 
   const [busyReceiverId, setBusyReceiverId] = useState(null);
@@ -45,9 +56,33 @@ export default function MatchingPage() {
     return set;
   }, [outData]);
 
+  const acceptedBuddyIds = useMemo(
+    () =>
+      buildAcceptedBuddyIdSet(
+        outData?.myOutgoingBuddyRequests,
+        incData?.myIncomingBuddyRequests,
+      ),
+    [outData, incData],
+  );
+
   const recommendations = data?.recommendMatches ?? [];
 
   const handleSend = async (receiverId) => {
+    const row = recommendations.find((r) => r.profile.userId === receiverId);
+    if (!row) {
+      toast.error("Match data is missing. Refresh the list and try again.");
+      return;
+    }
+    if (!canSendBuddyRequest(row.compatibilityScore)) {
+      toast.error(
+        `Compatibility must be at least ${buddyRequestMinCompatibilityScore()}% to send a request.`,
+      );
+      return;
+    }
+    if (acceptedBuddyIds.has(receiverId)) {
+      toast.error("You are already study buddies with this user.");
+      return;
+    }
     setBusyReceiverId(receiverId);
     try {
       await sendRequest({
@@ -55,6 +90,9 @@ export default function MatchingPage() {
           input: { receiverId, message: null },
         },
       });
+      toast.success("Buddy request sent.");
+    } catch (e) {
+      toast.error(e?.message || "Could not send request");
     } finally {
       setBusyReceiverId(null);
     }
@@ -71,6 +109,12 @@ export default function MatchingPage() {
         description="Find study partners ranked by shared courses, topics, availability, and study preferences — then send a buddy request."
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              to="/availability"
+              className="rounded-xl border border-violet-200 bg-white/90 px-4 py-2.5 text-sm font-semibold text-violet-800 shadow-[var(--shadow-card)] backdrop-blur-sm hover:border-violet-300"
+            >
+              Weekly availability
+            </Link>
             <Link
               to="/matches/setup"
               className="rounded-xl border border-violet-200 bg-white/90 px-4 py-2.5 text-sm font-semibold text-violet-800 shadow-[var(--shadow-card)] backdrop-blur-sm hover:border-violet-300"
@@ -116,9 +160,8 @@ export default function MatchingPage() {
               Complete your matching profile first
             </p>
             <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
-              The matching service needs a stored profile (courses, preferences,
-              availability) before it can rank partners. Finish onboarding in
-              Profile / Preferences, then come back here.
+              The matching service needs a stored profile (courses and preferences) before it can rank partners.
+              Add your weekly availability on the availability page, then use Refresh list.
             </p>
           </div>
         ) : recError ? (
@@ -141,6 +184,7 @@ export default function MatchingPage() {
                 item={item}
                 busyId={busyReceiverId}
                 outgoingPendingIds={outgoingPendingIds}
+                acceptedBuddyIds={acceptedBuddyIds}
                 onSendRequest={handleSend}
               />
             ))}

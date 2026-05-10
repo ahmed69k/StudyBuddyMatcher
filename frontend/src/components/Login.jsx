@@ -1,7 +1,9 @@
+// -- change menna — Login: post-login redirect target (see try block; rollback notes there)
 import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import apolloClient from "../apolloClient";
 
 const LOGIN = gql`
     mutation($input: loginUserInput!){
@@ -33,9 +35,17 @@ export default function Login(){
                     }
                 }
             })
+            // -- change menna — redirect to profile after login (rollback: use ORIGINAL lines below)
             localStorage.setItem("token", data.login.token)
-            console.log("User logged in successfully!")
-            navigate("/")
+            try {
+              await apolloClient.resetStore();
+            } catch {
+              /* ignore */
+            }
+            // ORIGINAL:
+            // console.log("User logged in successfully!")
+            // navigate("/")
+            navigate("/profile")
         }
         catch(err){
             console.log(err.message);
