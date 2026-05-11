@@ -1,11 +1,12 @@
 import { ApolloClient, InMemoryCache, HttpLink } from "@apollo/client";
 import { setContext } from "@apollo/client/link/context";
 
-const httpLink = new HttpLink({
-   // uri: "http://localhost:4001/" //gateway url
-   uri: import.meta.env.VITE_GRAPHQL_URL,
+const graphqlUri =
+  import.meta.env.VITE_GRAPHQL_URL || "http://localhost:4001/";
 
-})
+const httpLink = new HttpLink({
+  uri: graphqlUri.endsWith("/") ? graphqlUri : `${graphqlUri}/`,
+});
 const authLink = setContext((_, {headers})=>{
     const token = localStorage.getItem("token");
     return{
