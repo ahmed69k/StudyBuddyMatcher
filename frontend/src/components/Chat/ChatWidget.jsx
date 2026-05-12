@@ -20,6 +20,7 @@ import {
   FaPaperPlane,
 } from "react-icons/fa";
 
+import { GET_ALL_USERS } from "../../graphql/user";
 import { useAuthUser } from "../../hooks/useAuthUser";
 
 export default function ChatWidget() {
@@ -30,9 +31,26 @@ export default function ChatWidget() {
   const [selectedConversationId, setSelectedConversationId] =
     useState(null);
 
+  const { data: usersData } = useQuery(GET_ALL_USERS, {
+    fetchPolicy: "cache-and-network",
+  });
+
+  const users = usersData?.getAllUsers || [];
+
+  const getOtherUser = (convo) => {
+    if (!convo?.users || !userId) return null;
+
+    const otherUserId = convo.users.find((id) => id !== userId);
+    return users.find((u) => u.id === otherUserId) || null;
+  };
+
+  const getConversationName = (convo) => {
+    const other = getOtherUser(convo);
+    return other?.username || "Unknown user";
+  };
+
   const [message, setMessage] = useState("");
 
-  // ➕ NEW CONVERSATION STATE
   const [showNewConv, setShowNewConv] = useState(false);
   const [newUserId, setNewUserId] = useState("");
 
@@ -50,16 +68,12 @@ export default function ChatWidget() {
   });
 
   const [sendMessage] = useMutation(SEND_MESSAGE);
-
-  // ➕ CREATE CONVERSATION MUTATION
   const [createConversation] = useMutation(CREATE_CONVERSATION);
 
   const conversations = data?.getUserConversations || [];
 
   const selectedConversation =
-    conversations.find(
-      (c) => c.id === selectedConversationId
-    ) || null;
+    conversations.find((c) => c.id === selectedConversationId) || null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -77,7 +91,6 @@ export default function ChatWidget() {
     variables: {
       conversationId: selectedConversationId,
     },
-
     skip: !selectedConversationId,
 
     onData: async ({ data }) => {
@@ -108,31 +121,25 @@ export default function ChatWidget() {
     await refetch();
   };
 
-  // ➕ CREATE CONVERSATION HANDLER
-    const handleCreateConversation = async () => {
+  const handleCreateConversation = async () => {
     if (!newUserId.trim()) return;
 
     try {
-        await createConversation({
+      await createConversation({
         variables: {
-            input: {
+          input: {
             addedUser: newUserId,
-            },
+          },
         },
-        });
+      });
 
-        // ✅ reset input
-        setNewUserId("");
-
-        // ✅ close create UI immediately
-        setShowNewConv(false);
-
-        // ✅ refresh conversations list
-        await refetch();
+      setNewUserId("");
+      setShowNewConv(false);
+      await refetch();
     } catch (err) {
-        console.error(err);
+      console.error(err);
     }
-    };
+  };
 
   const messages = selectedConversation?.messages
     ? [...selectedConversation.messages].slice().reverse()
@@ -165,6 +172,7 @@ export default function ChatWidget() {
           hover:scale-105
           hover:border-violet-300
           hover:shadow-xl
+          cursor-pointer
         "
       >
         {open ? <FaTimes size={20} /> : <FaComments size={22} />}
@@ -195,31 +203,17 @@ export default function ChatWidget() {
             duration-300
           "
         >
-          {/* Glow */}
-          <div
-            aria-hidden
-            className="
-              pointer-events-none
-              absolute
-              inset-0
-              bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.12),transparent_45%)]
-            "
-          />
-
-          {/* Header */}
           <div className="relative flex items-center justify-between border-b border-violet-100/70 px-5 py-4">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
                 Messages
               </h2>
-
               <p className="text-xs text-slate-500">
                 Study chats & collaboration
               </p>
             </div>
 
             <div className="flex gap-2">
-              {/* ➕ NEW CONV BUTTON */}
               <button
                 onClick={() => setShowNewConv((p) => !p)}
                 className="
@@ -233,6 +227,7 @@ export default function ChatWidget() {
                   text-violet-700
                   transition
                   hover:bg-violet-200
+                  cursor-pointer
                 "
               >
                 +
@@ -254,6 +249,7 @@ export default function ChatWidget() {
                     text-violet-700
                     transition
                     hover:bg-violet-200
+                    cursor-pointer
                   "
                 >
                   <FaArrowLeft size={14} />
@@ -262,7 +258,6 @@ export default function ChatWidget() {
             </div>
           </div>
 
-          {/* ➕ CREATE CONVERSATION UI */}
           {showNewConv && (
             <div className="p-3 border-b border-violet-100/70">
               <div className="flex gap-2">
@@ -277,7 +272,7 @@ export default function ChatWidget() {
 
                 <button
                   onClick={handleCreateConversation}
-                  className="rounded-xl bg-violet-600 px-4 text-white"
+                  className="rounded-xl bg-violet-600 px-4 text-white cursor-pointer"
                 >
                   Add
                 </button>
@@ -285,59 +280,74 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {/* Conversations */}
           {!selectedConversationId ? (
             <div className="flex-1 overflow-y-auto p-3">
               <div className="space-y-3">
-                {conversations.map((convo) => (
-                  <button
-                    key={convo.id}
-                    onClick={() =>
-                      setSelectedConversationId(convo.id)
-                    }
-                    className="
-                      w-full
-                      rounded-3xl
-                      border
-                      border-violet-100/70
-                      bg-white/70
-                      p-4
-                      text-left
-                      shadow-sm
-                      backdrop-blur-sm
-                      transition-all
-                      hover:-translate-y-0.5
-                      hover:border-violet-200
-                      hover:shadow-md
-                    "
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="
-                        flex h-12 w-12 items-center justify-center
-                        rounded-2xl bg-gradient-to-br
-                        from-violet-500 to-purple-600
-                        text-sm font-bold text-white shadow-lg
-                      ">
-                        {convo.id.slice(0, 2).toUpperCase()}
-                      </div>
+                {conversations.map((convo) => {
+                  const other = getOtherUser(convo);
 
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          Conversation
-                        </p>
+                  return (
+                    <button
+                      key={convo.id}
+                      onClick={() =>
+                        setSelectedConversationId(convo.id)
+                      }
+                      className="
+                        w-full
+                        rounded-3xl
+                        border
+                        border-violet-100/70
+                        bg-white/70
+                        p-4
+                        text-left
+                        shadow-sm
+                        backdrop-blur-sm
+                        transition-all
+                        hover:-translate-y-0.5
+                        hover:border-violet-200
+                        hover:shadow-md
+                        cursor-pointer
+                      "
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="
+                          flex h-12 w-12 items-center justify-center overflow-hidden
+                          rounded-2xl bg-gradient-to-br
+                          from-violet-500 to-purple-600
+                          text-sm font-bold text-white shadow-lg
+                        ">
+                          {other?.profilePicture ? (
+                            <img
+                              src={other.profilePicture}
+                              alt="avatar"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span>
+                              {getConversationName(convo)
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </span>
+                          )}
+                        </div>
 
-                        <p className="text-xs text-slate-500">
-                          {convo.messages.length} messages
-                        </p>
+                        <div>
+                          <p className="font-semibold text-slate-800">
+                            {getConversationName(convo)}
+                          </p>
+
+                          <p className="text-xs text-slate-500">
+                            {convo.messages.length} messages
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : (
             <>
-              {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-5">
                 <div className="space-y-5">
                   {messages.map((msg) => {
@@ -369,9 +379,9 @@ export default function ChatWidget() {
                         </div>
 
                         <div
-                          className={`max-w-[78%] rounded-[1.6rem] px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                          className={`max-w-[78%] rounded-[1.6rem] px-4 py-3 text-sm ${
                             isMine
-                              ? "bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white"
+                              ? "bg-violet-600 text-white"
                               : "border border-violet-100/70 bg-white/85 text-slate-700"
                           }`}
                         >
@@ -385,7 +395,6 @@ export default function ChatWidget() {
                 </div>
               </div>
 
-              {/* Input */}
               <div className="border-t border-violet-100/70 p-4">
                 <div className="flex items-center gap-3 rounded-2xl border border-violet-100/80 bg-white/70 p-2">
                   <input
@@ -393,16 +402,16 @@ export default function ChatWidget() {
                     onChange={(e) =>
                       setMessage(e.target.value)
                     }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSend();
-                    }}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleSend()
+                    }
                     placeholder="Send a message..."
                     className="flex-1 bg-transparent px-3 py-2 text-sm outline-none"
                   />
 
                   <button
                     onClick={handleSend}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 text-white"
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-600 text-white cursor-pointer"
                   >
                     <FaPaperPlane size={14} />
                   </button>
