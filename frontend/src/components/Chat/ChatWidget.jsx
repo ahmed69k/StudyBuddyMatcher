@@ -26,13 +26,20 @@ export default function ChatWidget() {
   const { user } = useAuthUser();
   const userId = user?.id;
 
-  // ✅ ONLY ID (fixes stale state bug)
   const [selectedConversationId, setSelectedConversationId] =
     useState(null);
 
   const [message, setMessage] = useState("");
 
   const messagesEndRef = useRef(null);
+
+  // ✅ audio ref
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/notification.mp3");
+    audioRef.current.volume = 0.5;
+  }, []);
 
   const { data, refetch } = useQuery(GET_CONVERSATIONS, {
     fetchPolicy: "cache-and-network",
@@ -42,7 +49,6 @@ export default function ChatWidget() {
 
   const conversations = data?.getUserConversations || [];
 
-  // ✅ derive conversation (no state copy anymore)
   const selectedConversation =
     conversations.find(
       (c) => c.id === selectedConversationId
@@ -71,6 +77,11 @@ export default function ChatWidget() {
       const newMessage = data.data?.messageSent;
       if (!newMessage) return;
 
+      // ✅ play sound only for incoming messages
+      if (newMessage.senderId !== userId) {
+        audioRef.current?.play().catch(() => {});
+      }
+
       await refetch();
     },
   });
@@ -91,7 +102,6 @@ export default function ChatWidget() {
     await refetch();
   };
 
-  // server is DESC → convert once
   const messages = selectedConversation?.messages
     ? [...selectedConversation.messages].slice().reverse()
     : [];
@@ -125,11 +135,7 @@ export default function ChatWidget() {
           hover:shadow-xl
         "
       >
-        {open ? (
-          <FaTimes size={20} />
-        ) : (
-          <FaComments size={22} />
-        )}
+        {open ? <FaTimes size={20} /> : <FaComments size={22} />}
       </button>
 
       {/* Window */}
@@ -169,18 +175,7 @@ export default function ChatWidget() {
           />
 
           {/* Header */}
-          <div
-            className="
-              relative
-              flex
-              items-center
-              justify-between
-              border-b
-              border-violet-100/70
-              px-5
-              py-4
-            "
-          >
+          <div className="relative flex items-center justify-between border-b border-violet-100/70 px-5 py-4">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
                 Messages
@@ -241,26 +236,13 @@ export default function ChatWidget() {
                     "
                   >
                     <div className="flex items-center gap-3">
-                      <div
-                        className="
-                          flex
-                          h-12
-                          w-12
-                          items-center
-                          justify-center
-                          rounded-2xl
-                          bg-gradient-to-br
-                          from-violet-500
-                          to-purple-600
-                          text-sm
-                          font-bold
-                          text-white
-                          shadow-lg
-                        "
-                      >
-                        {convo.id
-                          .slice(0, 2)
-                          .toUpperCase()}
+                      <div className="
+                          flex h-12 w-12 items-center justify-center
+                          rounded-2xl bg-gradient-to-br
+                          from-violet-500 to-purple-600
+                          text-sm font-bold text-white shadow-lg
+                        ">
+                        {convo.id.slice(0, 2).toUpperCase()}
                       </div>
 
                       <div>
@@ -283,28 +265,19 @@ export default function ChatWidget() {
               <div className="flex-1 overflow-y-auto px-4 py-5">
                 <div className="space-y-5">
                   {messages.map((msg) => {
-                    const isMine =
-                      msg.senderId === userId;
+                    const isMine = msg.senderId === userId;
 
                     const formattedTime =
-                      new Date(
-                        Number(msg.sendDate)
-                      ).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      });
-
-                    const senderName = isMine
-                      ? "You"
-                      : `${msg.senderName}`;
+                      new Date(Number(msg.sendDate)).toLocaleTimeString(
+                        [],
+                        { hour: "2-digit", minute: "2-digit" }
+                      );
 
                     return (
                       <div
                         key={msg.id}
                         className={`flex flex-col ${
-                          isMine
-                            ? "items-end"
-                            : "items-start"
+                          isMine ? "items-end" : "items-start"
                         }`}
                       >
                         <div
@@ -316,29 +289,17 @@ export default function ChatWidget() {
                         >
                           {!isMine && (
                             <span className="font-semibold text-slate-700">
-                              {senderName}
+                              {msg.senderName}
                             </span>
                           )}
-
                           <span>{formattedTime}</span>
                         </div>
 
                         <div
-                          className={`max-w-[78%] rounded-[1.6rem] px-4 py-3 text-sm leading-relaxed shadow-sm transition-all ${
+                          className={`max-w-[78%] rounded-[1.6rem] px-4 py-3 text-sm leading-relaxed shadow-sm ${
                             isMine
-                              ? `
-                                rounded-br-md
-                                bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500
-                                text-white
-                                shadow-violet-300/30
-                              `
-                              : `
-                                rounded-bl-md
-                                border border-violet-100/70
-                                bg-white/85
-                                text-slate-700
-                                backdrop-blur-sm
-                              `
+                              ? "bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white"
+                              : "border border-violet-100/70 bg-white/85 text-slate-700"
                           }`}
                         >
                           {msg.message}
@@ -353,24 +314,20 @@ export default function ChatWidget() {
 
               {/* Input */}
               <div className="border-t border-violet-100/70 p-4">
-                <div className="flex items-center gap-3 rounded-2xl border border-violet-100/80 bg-white/70 p-2 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-2xl border border-violet-100/80 bg-white/70 p-2">
                   <input
                     value={message}
-                    onChange={(e) =>
-                      setMessage(e.target.value)
-                    }
+                    onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleSend();
-                      }
+                      if (e.key === "Enter") handleSend();
                     }}
                     placeholder="Send a message..."
-                    className="flex-1 bg-transparent px-3 py-2 text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                    className="flex-1 bg-transparent px-3 py-2 text-sm outline-none"
                   />
 
                   <button
                     onClick={handleSend}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg transition hover:scale-105"
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 text-white"
                   >
                     <FaPaperPlane size={14} />
                   </button>
