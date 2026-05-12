@@ -10,6 +10,7 @@ import {
   GET_CONVERSATIONS,
   SEND_MESSAGE,
   MESSAGE_SUBSCRIPTION,
+  CREATE_CONVERSATION,
 } from "./../../graphql/chat";
 
 import {
@@ -31,9 +32,12 @@ export default function ChatWidget() {
 
   const [message, setMessage] = useState("");
 
+  // ➕ NEW CONVERSATION STATE
+  const [showNewConv, setShowNewConv] = useState(false);
+  const [newUserId, setNewUserId] = useState("");
+
   const messagesEndRef = useRef(null);
 
-  // ✅ audio ref
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -46,6 +50,9 @@ export default function ChatWidget() {
   });
 
   const [sendMessage] = useMutation(SEND_MESSAGE);
+
+  // ➕ CREATE CONVERSATION MUTATION
+  const [createConversation] = useMutation(CREATE_CONVERSATION);
 
   const conversations = data?.getUserConversations || [];
 
@@ -77,7 +84,6 @@ export default function ChatWidget() {
       const newMessage = data.data?.messageSent;
       if (!newMessage) return;
 
-      // ✅ play sound only for incoming messages
       if (newMessage.senderId !== userId) {
         audioRef.current?.play().catch(() => {});
       }
@@ -101,6 +107,32 @@ export default function ChatWidget() {
     setMessage("");
     await refetch();
   };
+
+  // ➕ CREATE CONVERSATION HANDLER
+    const handleCreateConversation = async () => {
+    if (!newUserId.trim()) return;
+
+    try {
+        await createConversation({
+        variables: {
+            input: {
+            addedUser: newUserId,
+            },
+        },
+        });
+
+        // ✅ reset input
+        setNewUserId("");
+
+        // ✅ close create UI immediately
+        setShowNewConv(false);
+
+        // ✅ refresh conversations list
+        await refetch();
+    } catch (err) {
+        console.error(err);
+    }
+    };
 
   const messages = selectedConversation?.messages
     ? [...selectedConversation.messages].slice().reverse()
@@ -186,11 +218,10 @@ export default function ChatWidget() {
               </p>
             </div>
 
-            {selectedConversationId && (
+            <div className="flex gap-2">
+              {/* ➕ NEW CONV BUTTON */}
               <button
-                onClick={() =>
-                  setSelectedConversationId(null)
-                }
+                onClick={() => setShowNewConv((p) => !p)}
                 className="
                   flex
                   h-10
@@ -204,10 +235,55 @@ export default function ChatWidget() {
                   hover:bg-violet-200
                 "
               >
-                <FaArrowLeft size={14} />
+                +
               </button>
-            )}
+
+              {selectedConversationId && (
+                <button
+                  onClick={() =>
+                    setSelectedConversationId(null)
+                  }
+                  className="
+                    flex
+                    h-10
+                    w-10
+                    items-center
+                    justify-center
+                    rounded-2xl
+                    bg-violet-100/70
+                    text-violet-700
+                    transition
+                    hover:bg-violet-200
+                  "
+                >
+                  <FaArrowLeft size={14} />
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* ➕ CREATE CONVERSATION UI */}
+          {showNewConv && (
+            <div className="p-3 border-b border-violet-100/70">
+              <div className="flex gap-2">
+                <input
+                  value={newUserId}
+                  onChange={(e) =>
+                    setNewUserId(e.target.value)
+                  }
+                  placeholder="Enter user ID..."
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+                />
+
+                <button
+                  onClick={handleCreateConversation}
+                  className="rounded-xl bg-violet-600 px-4 text-white"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Conversations */}
           {!selectedConversationId ? (
@@ -237,11 +313,11 @@ export default function ChatWidget() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="
-                          flex h-12 w-12 items-center justify-center
-                          rounded-2xl bg-gradient-to-br
-                          from-violet-500 to-purple-600
-                          text-sm font-bold text-white shadow-lg
-                        ">
+                        flex h-12 w-12 items-center justify-center
+                        rounded-2xl bg-gradient-to-br
+                        from-violet-500 to-purple-600
+                        text-sm font-bold text-white shadow-lg
+                      ">
                         {convo.id.slice(0, 2).toUpperCase()}
                       </div>
 
@@ -265,7 +341,8 @@ export default function ChatWidget() {
               <div className="flex-1 overflow-y-auto px-4 py-5">
                 <div className="space-y-5">
                   {messages.map((msg) => {
-                    const isMine = msg.senderId === userId;
+                    const isMine =
+                      msg.senderId === userId;
 
                     const formattedTime =
                       new Date(Number(msg.sendDate)).toLocaleTimeString(
@@ -277,16 +354,12 @@ export default function ChatWidget() {
                       <div
                         key={msg.id}
                         className={`flex flex-col ${
-                          isMine ? "items-end" : "items-start"
+                          isMine
+                            ? "items-end"
+                            : "items-start"
                         }`}
                       >
-                        <div
-                          className={`mb-1 flex items-center gap-2 px-2 text-xs ${
-                            isMine
-                              ? "text-violet-300"
-                              : "text-slate-500"
-                          }`}
-                        >
+                        <div className="mb-1 flex items-center gap-2 px-2 text-xs text-slate-500">
                           {!isMine && (
                             <span className="font-semibold text-slate-700">
                               {msg.senderName}
@@ -317,7 +390,9 @@ export default function ChatWidget() {
                 <div className="flex items-center gap-3 rounded-2xl border border-violet-100/80 bg-white/70 p-2">
                   <input
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) =>
+                      setMessage(e.target.value)
+                    }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleSend();
                     }}

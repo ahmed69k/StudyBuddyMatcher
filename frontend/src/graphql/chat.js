@@ -54,3 +54,22 @@ export const MESSAGE_SUBSCRIPTION = gql`
     }
   }
 `;
+/**
+ * CREATE CONVERSATION
+ */
+export const CREATE_CONVERSATION = gql`
+  mutation CreateConversation($input: CreateConversationInput!) {
+    createConversation(input: $input) {
+      id
+      users
+      createDate
+      messages {
+        id
+        senderId
+        senderName
+        message
+        sendDate
+      }
+    }
+  }
+`;
