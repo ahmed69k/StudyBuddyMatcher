@@ -18,6 +18,7 @@ import PageHeader from "../components/ui/PageHeader";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import { CREATE_CONVERSATION } from "../graphql/chat";
 
 function initials(name) {
   if (!name?.trim()) return "?";
@@ -29,6 +30,9 @@ export default function MatchDetailPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [createConversation, { loading: creating }] = useMutation(
+  CREATE_CONVERSATION
+);
   const stateMatch = location.state?.match;
 
   const { user, loading: userLoading } = useAuthUser();
@@ -104,6 +108,33 @@ export default function MatchDetailPage() {
       </div>
     );
   }
+  const handleStartChat = async () => {
+  if (!profile?.userId) return;
+
+  try {
+    await createConversation({
+      variables: {
+        input: {
+          addedUser: profile.userId,
+        },
+      },
+    });
+
+    toast.success("Conversation ready");
+
+    // optional UX upgrade:
+    // navigate("/chat");
+  } catch (e) {
+    const msg = e?.message || "";
+
+    if (msg.includes("existing conversation")) {
+      toast.error("You already have a chat with this user.");
+      return;
+    }
+
+    toast.error(msg || "Could not start conversation");
+  }
+};
 
   if (!item) {
     return (
@@ -166,8 +197,12 @@ export default function MatchDetailPage() {
                 : ""}
             </p>
             {profile.email ? (
+              <div>
               <p className="mt-1 truncate text-sm text-white/80">{profile.email}</p>
+              <p className="mt-1 truncate text-sm text-white/80"> {profile.userId}</p>
+              </div>
             ) : null}
+            
             <div className="mt-4 flex flex-wrap gap-2">
               {(profile.courses ?? []).map((c) => (
                 <Badge key={c} tone="teal">
@@ -238,15 +273,15 @@ export default function MatchDetailPage() {
                   : "Send buddy request"}
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="secondary"
-          className="px-6 py-3"
-          disabled
-          title="Connect messaging service to enable chat"
-        >
-          Message (soon)
-        </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="px-6 py-3"
+            onClick={handleStartChat}
+            disabled={creating}
+          >
+            {creating ? "Opening chat..." : "Message"}
+          </Button>
       </div>
     </div>
   );
