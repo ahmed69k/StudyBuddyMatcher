@@ -9,6 +9,7 @@ import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import SegmentedTabs from "../components/ui/SegmentedTabs";
+import SessionFeedbackModal from "../components/sessions/SessionFeedbackModal";
 
 function parseIso(raw) {
   if (raw == null || raw === "") return null;
@@ -48,6 +49,7 @@ function sessionEndMs(start, durationMin) {
 export default function StudySessionsPage() {
   const [filter, setFilter] = useState("upcoming");
   const [tick, setTick] = useState(0);
+  const [feedbackSession, setFeedbackSession] = useState(null);
   const { user } = useAuthUser();
 
   const hasToken =
@@ -134,6 +136,12 @@ export default function StudySessionsPage() {
 
   return (
     <div className="relative mx-auto max-w-6xl px-4 pb-32 pt-6 sm:px-6 lg:px-8">
+      <SessionFeedbackModal
+        session={feedbackSession}
+        meId={meId}
+        isOpen={!!feedbackSession}
+        onClose={() => setFeedbackSession(null)}
+      />
       <PageHeader
         eyebrow="Schedule"
         title="Study sessions"
@@ -324,6 +332,22 @@ export default function StudySessionsPage() {
                               }}
                             >
                               Copy link / info
+                            </Button>
+                          ) : null}
+                          {filter === "past" &&
+                          !s.viewerIsHost &&
+                          s.viewerHasJoined &&
+                          meId ? (
+                            <Button
+                              type="button"
+                              className="px-4 py-2 text-sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setFeedbackSession(s);
+                              }}
+                            >
+                              Give feedback
                             </Button>
                           ) : null}
                         </div>

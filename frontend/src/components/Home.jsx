@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DashboardPage from "../pages/DashboardPage";
 import LinkButton from "./ui/LinkButton";
 
 function FeatureCard({ icon, title, description }) {
@@ -24,6 +25,10 @@ export default function Home() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  if (loggedIn) {
+    return <DashboardPage />;
+  }
 
   return (
     <main className="relative overflow-hidden px-4 pb-20 pt-6 sm:px-6 lg:px-8">
