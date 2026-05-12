@@ -4,6 +4,8 @@ import { useQuery } from "@apollo/client/react";
 import { GET_ME } from "../graphql/auth";
 import { GET_MY_NOTIFICATIONS } from "../graphql/notifications";
 import apolloClient from "../apolloClient";
+import { VscSettingsGear } from "react-icons/vsc";
+import { IoPerson } from "react-icons/io5";
 
 const navClass = ({ isActive }) =>
   `relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
@@ -244,19 +246,7 @@ export default function Navbar() {
                         }}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 transition"
                       >
-                        <svg
-                          className="h-5 w-5 text-violet-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M5.121 17.804A4 4 0 0112 15h0a4 4 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
+                      <IoPerson color="var(--color-brand-500)"></IoPerson>
                         Profile
                       </button>
 
@@ -268,19 +258,7 @@ export default function Navbar() {
                         }}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 transition"
                       >
-                        <svg
-                          className="h-5 w-5 text-violet-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4a7.978 7.978 0 01-.21 1.79l2.11 1.65-2 3.46-2.49-1a8.06 8.06 0 01-1.55.9l-.38 2.65h-4l-.38-2.65a8.06 8.06 0 01-1.55-.9l-2.49 1-2-3.46 2.11-1.65A8 8 0 013 12c0-.61.07-1.2.21-1.79L1.1 8.56l2-3.46 2.49 1c.49-.36 1.01-.68 1.55-.9L7.52 2h4l.38 2.65c.54.22 1.06.54 1.55.9l2.49-1 2 3.46-2.11 1.65c.14.59.21 1.18.21 1.79z"
-                          />
-                        </svg>
+                      <VscSettingsGear color="var(--color-brand-500)"></VscSettingsGear>
                         Settings
                       </button>
 
