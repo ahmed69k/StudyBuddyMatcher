@@ -4,6 +4,7 @@ const typeDefs = gql`
     type Message{
         id:ID!
         senderId:ID!
+        senderName:String!
         message:String!
         conversationId:String!
         sendDate:String!

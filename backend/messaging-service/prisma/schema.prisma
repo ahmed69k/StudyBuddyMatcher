@@ -13,6 +13,7 @@ datasource db {
 model Message {
   id         String   @id @default(cuid())
   senderId   String
+  senderName String   @default("Unknown")
   message    String
   sendDate   DateTime @default(now())
   conversation Conversation @relation("ConversationMessages", fields: [conversationId], references:[id])

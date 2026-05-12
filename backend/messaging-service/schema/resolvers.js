@@ -61,6 +61,7 @@ const resolvers = {
             const newMessage = await prisma.message.create({
                 data:{
                     senderId: ctxUser.id,
+                    senderName: ctxUser.username,
                     conversationId: conversationId,
                     message: message
                 }

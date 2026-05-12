@@ -7,6 +7,7 @@ import {BrowserRouter} from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 //new for deployement
 import "./style.css";
+import ChatWidget from './components/Chat/ChatWidget.jsx'
 
 
 
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')).render(
       <Toaster position="top-right" />
       <BrowserRouter>
         <App />
+        <ChatWidget/>
       </BrowserRouter>
     </ApolloProvider>
   </StrictMode>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@apollo/client/react";
 import { GET_ME } from "../graphql/auth";
 import { GET_MY_NOTIFICATIONS } from "../graphql/notifications";
@@ -38,17 +38,12 @@ function Avatar({ name, imageUrl, size = "md" }) {
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    setIsLoggedIn(!!token);
-  }, [location.pathname]);
+
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 12);
@@ -57,11 +52,10 @@ export default function Navbar() {
   }, []);
 
   const { data, loading, error } = useQuery(GET_ME, {
-    skip: !isLoggedIn,
     fetchPolicy: "cache-and-network",
   });
-
   const user = data?.me;
+  const isLoggedIn = !!user;
 
   // 🔔 Notifications query
   const { data: notifData } = useQuery(GET_MY_NOTIFICATIONS, {
@@ -81,7 +75,6 @@ export default function Navbar() {
       error?.message?.includes("Not authenticated")
     ) {
       localStorage.removeItem("token");
-      setIsLoggedIn(false);
     }
   }, [error]);
 
@@ -92,7 +85,7 @@ export default function Navbar() {
     } catch {
       /* ignore */
     }
-    setIsLoggedIn(false);
+    localStorage.removeItem("token")
     setIsProfileOpen(false);
     navigate("/login");
   };
