@@ -15,6 +15,7 @@ import PageHeader from "../components/ui/PageHeader";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
+import SessionFeedbackModal from "../components/sessions/SessionFeedbackModal";
 
 function parseIso(raw) {
   if (raw == null || raw === "") return null;
@@ -108,6 +109,7 @@ export default function SessionDetailPage() {
     ],
   });
 
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editTopic, setEditTopic] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -233,9 +235,18 @@ export default function SessionDetailPage() {
   }
 
   const start = parseIso(session.dateTime);
+  const sessionEnded =
+    !!start &&
+    start.getTime() + (Number(session.duration) || 0) * 60 * 1000 < Date.now();
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
+      <SessionFeedbackModal
+        session={session}
+        meId={meId}
+        isOpen={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
       <PageHeader
         eyebrow="Session"
         title={session.topic}
@@ -467,15 +478,26 @@ export default function SessionDetailPage() {
           )}
         </>
       ) : viewerHasJoined && !viewerIsHost ? (
-        <Button
-          type="button"
-          variant="secondary"
-          className="px-6 py-3"
-          disabled={leaving}
-          onClick={handleLeave}
-        >
-          {leaving ? "Leaving…" : "Leave session"}
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          {sessionEnded ? (
+            <Button
+              type="button"
+              className="px-6 py-3"
+              onClick={() => setFeedbackOpen(true)}
+            >
+              Give feedback
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            className="px-6 py-3"
+            disabled={leaving}
+            onClick={handleLeave}
+          >
+            {leaving ? "Leaving…" : "Leave session"}
+          </Button>
+        </div>
       ) : null}
 
       {error && !isForbidden && session ? (
