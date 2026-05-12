@@ -19,6 +19,7 @@ export default function MatchRecommendationCard({
   busyId,
   outgoingPendingIds,
   acceptedBuddyIds = new Set(),
+  showInviteToStudy = false,
 }) {
   const { profile, compatibilityScore, reasons } = item;
   const isPending = outgoingPendingIds?.has(profile.userId);
@@ -115,6 +116,15 @@ export default function MatchRecommendationCard({
           </Button>
         )}
       </div>
+
+      {showInviteToStudy ? (
+        <Link
+          to="/sessions/new"
+          className="mt-4 flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-600 hover:to-teal-600 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+        >
+          Invite to study
+        </Link>
+      ) : null}
     </Card>
   );
 }
