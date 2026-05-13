@@ -15,6 +15,7 @@ import Notifications from "./pages/Notifications/Notifications";
 import NotificationDetailsPage from "./pages/Notifications/NotificationDetailsPage";
 import ProfileEdit from "./pages/Profile/ProfileEdit.jsx";
 import ProfilePage from "./pages/Profile/Profile.jsx";
+import StudyPreferencesPage from "./pages/Profile/StudyPreferences.jsx";
 
 function App() {
   return (
@@ -37,6 +38,11 @@ function App() {
         <Route path="/profile" element={
           <ProtectedRoute>
             <ProfilePage/>
+          </ProtectedRoute>
+        } />
+        <Route path="/profile/preferences" element={
+          <ProtectedRoute>
+            <StudyPreferencesPage/>
           </ProtectedRoute>
         } />
 
