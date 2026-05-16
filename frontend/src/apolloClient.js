@@ -17,7 +17,7 @@ const graphqlUri =
   import.meta.env.VITE_GRAPHQL_URL || "http://localhost:4001/";
 
 const websocketUri =
-  import.meta.env.VITE_WS_URL || "wss://messaging-production-c068.up.railway.app/";
+  import.meta.env.VITE_WS_URL || "ws://localhost:8001/graphql";
 
 /* HTTP LINK */
 
