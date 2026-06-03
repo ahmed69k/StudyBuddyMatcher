@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/layout/ProtectedRoute";
 import MatchingPage from "./pages/MatchingPage";
 import MatchingProfileSetupPage from "./pages/MatchingProfileSetupPage";
+import AvailabilityManagePage from "./pages/AvailabilityManagePage";
 import MatchDetailPage from "./pages/MatchDetailPage";
 import StudySessionsPage from "./pages/StudySessionsPage";
 import SessionCreatePage from "./pages/SessionCreatePage";
@@ -14,6 +15,7 @@ import Notifications from "./pages/Notifications/Notifications";
 import NotificationDetailsPage from "./pages/Notifications/NotificationDetailsPage";
 import ProfileEdit from "./pages/Profile/ProfileEdit.jsx";
 import ProfilePage from "./pages/Profile/Profile.jsx";
+import StudyPreferencesPage from "./pages/Profile/StudyPreferences.jsx";
 
 function App() {
   return (
@@ -38,6 +40,11 @@ function App() {
             <ProfilePage/>
           </ProtectedRoute>
         } />
+        <Route path="/profile/preferences" element={
+          <ProtectedRoute>
+            <StudyPreferencesPage/>
+          </ProtectedRoute>
+        } />
 
         <Route path="/notifications/:id" element={
           <ProtectedRoute>
@@ -49,6 +56,14 @@ function App() {
           element={
             <ProtectedRoute>
               <MatchingProfileSetupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/availability"
+          element={
+            <ProtectedRoute>
+              <AvailabilityManagePage />
             </ProtectedRoute>
           }
         />

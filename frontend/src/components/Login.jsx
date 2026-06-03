@@ -2,6 +2,7 @@ import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import apolloClient from "../apolloClient";
 
 const LOGIN = gql`
     mutation($input: loginUserInput!){
@@ -33,9 +34,13 @@ export default function Login(){
                     }
                 }
             })
-            localStorage.setItem("token", data.login.token)
-            console.log("User logged in successfully!")
-            navigate("/")
+            localStorage.setItem("token", data.login.token);
+            try {
+              await apolloClient.resetStore();
+            } catch {
+              /* ignore */
+            }
+            navigate("/", { replace: true });
         }
         catch(err){
             console.log(err.message);

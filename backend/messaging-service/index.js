@@ -19,10 +19,12 @@
       resolvers,
 
   });
+  const httpPort = Number(process.env.PORT) || 8000;
+  const wsPort = Number(process.env.WS_PORT) || 8001;
   const wsServer = new WebSocketServer({
-    host: "0.0.0.0",
-    port: 8001,
-    path: '/graphql'
+      host: "0.0.0.0",
+      port: wsPort,
+      path: '/graphql'
   })
   useServer(
     {
@@ -42,7 +44,7 @@
     wsServer
   );
 
-  console.log("WebSocket server running at ws://localhost:8001/graphql");
+  console.log(`WebSocket server running at ws://localhost:${wsPort}/graphql`);
 
   const server = new ApolloServer({
     schema,
@@ -56,7 +58,7 @@
   })
 
   const { url } = await startStandaloneServer(server,{
-  listen: {port: 8000, host: "0.0.0.0"},
+  listen: {port: httpPort, host: "0.0.0.0"},
   context: ({ req }) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "").trim();

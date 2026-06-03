@@ -41,8 +41,14 @@ const resolvers = {
             const newConversation = await prisma.conversation.create({
                 data:{
                     users:[ctxUser.id, addedUser]
+                },
+                include:{
+                    messages: true
                 }
             })
+            if(!newConversation.messages){
+                newConversation.messages = [];
+            }
             return newConversation
         },
         sendMessage: async(_,{input},context)=>{
@@ -61,6 +67,7 @@ const resolvers = {
             const newMessage = await prisma.message.create({
                 data:{
                     senderId: ctxUser.id,
+                    senderName: ctxUser.username,
                     conversationId: conversationId,
                     message: message
                 }

@@ -28,10 +28,23 @@ model StudySession {
   /// Set when the “starting soon” reminder was sent to participants.
   upcomingReminderSentAt DateTime?
   participants SessionParticipant[]
+  invites      StudySessionInvite[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
   @@index([dateTime, upcomingReminderSentAt])
+}
+
+/// Buddy invited at create time — visible in their list but not a participant until they join.
+model StudySessionInvite {
+  id            String       @id @default(uuid())
+  sessionId     String
+  session       StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  inviteeUserId String
+  createdAt     DateTime     @default(now())
+
+  @@unique([sessionId, inviteeUserId])
+  @@index([inviteeUserId])
 }
 
 model SessionParticipant {

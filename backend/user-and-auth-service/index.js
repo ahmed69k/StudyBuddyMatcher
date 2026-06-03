@@ -16,9 +16,10 @@ const server = new ApolloServer({
   introspection: true,
 });
 const jwtSecret = process.env.SECRET_KEY?.trim();
+const port = Number(process.env.PORT) || 3000;
 
 const { url } = await startStandaloneServer(server, {
-  listen: { port: 3000, host: "0.0.0.0" },
+  listen: { port, host: "0.0.0.0" },
   context: ({ req }) => {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "").trim();

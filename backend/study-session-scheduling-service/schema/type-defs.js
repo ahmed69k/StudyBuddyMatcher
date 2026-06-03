@@ -19,10 +19,15 @@ const typeDefs = `#graphql
     duration: Int!
     sessionType: SessionType!
     creatorId: String!
+    """Link / location — only returned after you join or if you are the host."""
     contactInfo: String
     participants: [SessionParticipant!]!
     createdAt: String!
     updatedAt: String!
+    viewerIsHost: Boolean!
+    viewerHasJoined: Boolean!
+    """True when a buddy invited you but you have not joined yet (not a participant)."""
+    viewerInvitePending: Boolean!
   }
 
   input CreateSessionInput {
@@ -33,6 +38,8 @@ const typeDefs = `#graphql
     sessionType: SessionType!
     creatorId: String!
     contactInfo: String
+    """Accepted study buddies to notify & list this session for; they join explicitly (not auto-added as participants)."""
+    inviteParticipantUserIds: [String!]
   }
 
   input UpdateSessionInput {

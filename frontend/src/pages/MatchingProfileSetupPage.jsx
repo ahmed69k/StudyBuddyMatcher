@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation } from "@apollo/client/react";
-import { UPSERT_USER_PROFILE } from "../graphql/matching";
+import { useMutation, useQuery } from "@apollo/client/react";
+import { GET_USER_PROFILE_MATCHING, UPSERT_USER_PROFILE } from "../graphql/matching";
 import { useAuthUser } from "../hooks/useAuthUser";
 import PageHeader from "../components/ui/PageHeader";
 import Button from "../components/ui/Button";
@@ -26,13 +26,43 @@ export default function MatchingProfileSetupPage() {
   const [studyMode, setStudyMode] = useState("In Person");
   const [preferredGroupSize, setPreferredGroupSize] = useState(2);
   const [studyStyle, setStudyStyle] = useState("Discussion");
-  const [availabilityStr, setAvailabilityStr] = useState("");
+
+  const { data: profileData, loading: profileLoading, refetch: refetchMatchingProfile } = useQuery(
+    GET_USER_PROFILE_MATCHING,
+    {
+      variables: { userId: user?.id ?? "" },
+      skip: !user?.id,
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
   const [upsert, { loading: saving, error }] = useMutation(UPSERT_USER_PROFILE);
+
+  const matchingProfile = profileData?.userProfile;
+  const lastHydratedKey = useRef(null);
+
+  useEffect(() => {
+    const p = matchingProfile;
+    if (!p?.userId) return;
+    const key = `${p.userId}:${p.updatedAt ?? ""}`;
+    if (lastHydratedKey.current === key) return;
+    lastHydratedKey.current = key;
+    setName(p.name || "");
+    setEmail(p.email || "");
+    setCoursesStr((p.courses || []).join(", "));
+    setTopicsStr((p.topics || []).join(", "));
+    if (p.studyPace) setStudyPace(p.studyPace);
+    if (p.studyMode) setStudyMode(p.studyMode);
+    if (p.preferredGroupSize != null) setPreferredGroupSize(p.preferredGroupSize);
+    if (p.studyStyle) setStudyStyle(p.studyStyle);
+  }, [matchingProfile]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user?.id) return;
+
+    const { data: fresh } = await refetchMatchingProfile({ userId: user.id });
+    const availability = fresh?.userProfile?.availability ?? [];
 
     await upsert({
       variables: {
@@ -46,7 +76,7 @@ export default function MatchingProfileSetupPage() {
           studyMode,
           preferredGroupSize: Number(preferredGroupSize) || 2,
           studyStyle,
-          availability: splitList(availabilityStr),
+          availability,
         },
       },
     });
@@ -59,7 +89,7 @@ export default function MatchingProfileSetupPage() {
       <PageHeader
         eyebrow="Prerequisite"
         title="Matching profile"
-        description="This data powers recommendations and buddy requests in the matching service. Align it later with your main profile / preferences when those flows are ready."
+        description="Courses and study preferences feed the matching service. Weekly availability is managed separately and syncs automatically for overlap scoring."
         action={
           <Link
             to="/matches"
@@ -71,7 +101,7 @@ export default function MatchingProfileSetupPage() {
       />
 
       <Card className="p-6 sm:p-8">
-        {userLoading ? (
+        {userLoading || profileLoading ? (
           <p className="text-slate-600">Loading account…</p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -187,17 +217,18 @@ export default function MatchingProfileSetupPage() {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-slate-700">
-                Availability hints <span className="font-normal text-slate-500">(comma-separated, e.g. Tue afternoon)</span>
-              </label>
-              <textarea
-                value={availabilityStr}
-                onChange={(e) => setAvailabilityStr(e.target.value)}
-                rows={2}
-                placeholder="Mon morning, Wed 1–5pm"
-                className="mt-1.5 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none ring-violet-200 focus:ring-2"
-              />
+            <div className="rounded-2xl border border-violet-100 bg-violet-50/50 px-4 py-4">
+              <p className="text-sm font-medium text-slate-800">Weekly availability</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Add time windows per weekday on the availability page. Updates publish to the matching service so
+                compatibility scores stay in sync.
+              </p>
+              <Link
+                to="/availability"
+                className="mt-3 inline-flex text-sm font-semibold text-violet-700 underline-offset-4 hover:underline"
+              >
+                Manage availability →
+              </Link>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

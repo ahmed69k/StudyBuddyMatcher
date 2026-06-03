@@ -1,4 +1,5 @@
 import "dotenv/config";
+import fs from "fs";
 import { ApolloServer } from "@apollo/server";
 import { startStandaloneServer } from "@apollo/server/standalone";
 import { stitchSchemas } from "@graphql-tools/stitch";
@@ -30,6 +31,49 @@ function normalizeEndpoint(raw) {
   return s.endsWith("/") ? s : `${s}/`;
 }
 
+/** True when this Node process runs inside a Linux container (Compose service DNS works). */
+function isDockerContainer() {
+  try {
+    return fs.existsSync("/.dockerenv");
+  } catch {
+    return false;
+  }
+}
+
+/** Hostnames that only resolve on the Docker Compose network (`ENOTFOUND` if the gateway runs on your PC). */
+const DOCKER_COMPOSE_SERVICE_HOSTS = new Set([
+  "matching-service",
+  "user-and-auth-service",
+  "profile-and-study-preferences-service",
+  "notification-service",
+  "availability-management-service",
+  "study-session-scheduling-service",
+  "feedback-trust-service",
+  "messaging-service",
+]);
+
+function endpointUsesComposeHostname(url) {
+  try {
+    const u = new URL(url);
+    return DOCKER_COMPOSE_SERVICE_HOSTS.has(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function resolveSubgraphEndpoint(envVar, fallback) {
+  const fromEnv = normalizeEndpoint(process.env[envVar] || "");
+  const fb = normalizeEndpoint(fallback);
+  if (!fromEnv) return fb;
+  if (!isDockerContainer() && endpointUsesComposeHostname(fromEnv)) {
+    console.warn(
+      `[graphql-gateway] ${envVar}=${fromEnv} uses a Compose-only hostname on the host; using ${fb} instead (run subgraphs with ports published, or run the gateway in Docker).`,
+    );
+    return fb;
+  }
+  return fromEnv;
+}
+
 function makeExecutor(endpoint) {
   return buildHTTPExecutor({
     endpoint,
@@ -44,7 +88,7 @@ function makeExecutor(endpoint) {
 async function loadSubschemas() {
   const subschemas = [];
   for (const [label, envVar, fallback] of SUBGRAPH_SPECS) {
-    const endpoint = normalizeEndpoint(process.env[envVar] || fallback);
+    const endpoint = resolveSubgraphEndpoint(envVar, fallback);
     if (!endpoint) {
       console.warn(`[graphql-gateway] skip ${label}: ${envVar} not set`);
       continue;

@@ -3,6 +3,9 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@apollo/client/react";
 import { GET_ME } from "../graphql/auth";
 import { GET_MY_NOTIFICATIONS } from "../graphql/notifications";
+import apolloClient from "../apolloClient";
+import { VscSettingsGear } from "react-icons/vsc";
+import { IoPerson } from "react-icons/io5";
 
 const navClass = ({ isActive }) =>
   `relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 ${
@@ -38,26 +41,23 @@ function Avatar({ name, imageUrl, size = "md" }) {
 export default function Navbar() {
   const navigate = useNavigate();
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    setIsLoggedIn(!!token);
 
+
+  useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 12);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const { data, loading, error } = useQuery(GET_ME, {
-    skip: !isLoggedIn,
     fetchPolicy: "cache-and-network",
   });
-
   const user = data?.me;
+  const isLoggedIn = !!user;
 
   // 🔔 Notifications query
   const { data: notifData } = useQuery(GET_MY_NOTIFICATIONS, {
@@ -77,13 +77,17 @@ export default function Navbar() {
       error?.message?.includes("Not authenticated")
     ) {
       localStorage.removeItem("token");
-      setIsLoggedIn(false);
     }
   }, [error]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem("token");
-    setIsLoggedIn(false);
+    try {
+      await apolloClient.resetStore();
+    } catch {
+      /* ignore */
+    }
+    localStorage.removeItem("token")
     setIsProfileOpen(false);
     navigate("/login");
   };
@@ -107,6 +111,11 @@ export default function Navbar() {
             icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
           },
           {
+            name: "Availability",
+            to: "/availability",
+            icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+          },
+          {
             name: "Sessions",
             to: "/sessions",
             icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
@@ -126,46 +135,49 @@ export default function Navbar() {
             : "border-b border-transparent bg-white/75 backdrop-blur-md"
         }`}
       >
-        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <NavLink
-            to="/"
-            end
-            className="text-xl font-extrabold tracking-tight text-slate-900"
-          >
-            <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-teal-500 bg-clip-text text-transparent">
-              Study Buddy Matcher
-            </span>
-          </NavLink>
-
-          {/* NAV LINKS */}
-          <div className="hidden items-center gap-1 md:flex">
-            {mainLinks.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                className={navClass}
-              >
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d={item.icon}
-                  />
-                </svg>
-                <span>{item.name}</span>
-              </NavLink>
-            ))}
+        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 flex-1 items-center justify-start">
+            <NavLink
+              to="/"
+              end
+              className="text-lg font-extrabold tracking-tight text-slate-900 sm:text-xl"
+            >
+              <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-teal-500 bg-clip-text text-transparent">
+                Study Buddy Matcher
+              </span>
+            </NavLink>
           </div>
 
-          {/* RIGHT SIDE */}
-          <div className="hidden items-center gap-3 md:flex">
+          <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
+            <div className="flex items-center gap-1">
+              {mainLinks.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/"}
+                  className={navClass}
+                >
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d={item.icon}
+                    />
+                  </svg>
+                  <span>{item.name}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
+            <div className="hidden items-center gap-3 md:flex">
             {isLoggedIn ? (
               showUserLoading ? (
                 <span className="text-sm text-slate-400">…</span>
@@ -234,19 +246,7 @@ export default function Navbar() {
                         }}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 transition"
                       >
-                        <svg
-                          className="h-5 w-5 text-violet-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M5.121 17.804A4 4 0 0112 15h0a4 4 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                          />
-                        </svg>
+                      <IoPerson color="var(--color-brand-500)"></IoPerson>
                         Profile
                       </button>
 
@@ -258,19 +258,7 @@ export default function Navbar() {
                         }}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 transition"
                       >
-                        <svg
-                          className="h-5 w-5 text-violet-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M12 8a4 4 0 100 8 4 4 0 000-8zm9 4a7.978 7.978 0 01-.21 1.79l2.11 1.65-2 3.46-2.49-1a8.06 8.06 0 01-1.55.9l-.38 2.65h-4l-.38-2.65a8.06 8.06 0 01-1.55-.9l-2.49 1-2-3.46 2.11-1.65A8 8 0 013 12c0-.61.07-1.2.21-1.79L1.1 8.56l2-3.46 2.49 1c.49-.36 1.01-.68 1.55-.9L7.52 2h4l.38 2.65c.54.22 1.06.54 1.55.9l2.49-1 2 3.46-2.11 1.65c.14.59.21 1.18.21 1.79z"
-                          />
-                        </svg>
+                      <VscSettingsGear color="var(--color-brand-500)"></VscSettingsGear>
                         Settings
                       </button>
 
@@ -304,20 +292,32 @@ export default function Navbar() {
                 </div>
               )
             ) : (
-              <div className="flex items-center gap-2">
-                <NavLink to="/login">Sign in</NavLink>
-                <NavLink to="/register">Get started</NavLink>
+              <div className="flex items-center gap-4">
+                <NavLink
+                  to="/login"
+                  className="text-sm font-semibold text-slate-600 transition hover:text-violet-800"
+                >
+                  Sign in
+                </NavLink>
+                <NavLink
+                  to="/register"
+                  className="rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/20 transition hover:shadow-lg hover:shadow-violet-500/25"
+                >
+                  Get started
+                </NavLink>
               </div>
             )}
-          </div>
+            </div>
 
-          {/* MOBILE BUTTON */}
-          <button
-            className="md:hidden"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            ☰
-          </button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-700 transition hover:bg-violet-50 md:hidden"
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              ☰
+            </button>
+          </div>
         </div>
       </nav>
 

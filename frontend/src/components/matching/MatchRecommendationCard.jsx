@@ -2,6 +2,10 @@ import { Link } from "react-router-dom";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
+import {
+  buddyRequestMinCompatibilityScore,
+  canSendBuddyRequest,
+} from "../../lib/buddyRequestThreshold";
 
 function initials(name) {
   if (!name?.trim()) return "?";
@@ -14,9 +18,15 @@ export default function MatchRecommendationCard({
   onSendRequest,
   busyId,
   outgoingPendingIds,
+  acceptedBuddyIds = new Set(),
+  showInviteToStudy = false,
 }) {
   const { profile, compatibilityScore, reasons } = item;
   const isPending = outgoingPendingIds?.has(profile.userId);
+  const isBuddy = acceptedBuddyIds?.has(profile.userId);
+  const minScore = buddyRequestMinCompatibilityScore();
+  const allowedByScore = canSendBuddyRequest(compatibilityScore);
+  const blockedByScore = minScore > 0 && !allowedByScore;
 
   return (
     <Card className="group flex flex-col overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
@@ -38,7 +48,7 @@ export default function MatchRecommendationCard({
                 {profile.studyPace || "pace"} pace
               </p>
             </div>
-            <Badge tone="violet">Match</Badge>
+            <Badge tone={isBuddy ? "emerald" : "violet"}>{isBuddy ? "Buddies" : "Match"}</Badge>
           </div>
         </div>
       </div>
@@ -67,7 +77,7 @@ export default function MatchRecommendationCard({
 
       {(profile.availability || []).length > 0 ? (
         <p className="mt-3 text-xs font-medium text-violet-700">
-          Availability overlap: {profile.availability.slice(0, 3).join(" · ")}
+          Weekly slots (sample): {(profile.availability || []).slice(0, 3).join(" · ")}
         </p>
       ) : null}
 
@@ -79,20 +89,42 @@ export default function MatchRecommendationCard({
         >
           View profile
         </Link>
-        <Button
-          type="button"
-          variant={isPending ? "secondary" : "primary"}
-          disabled={!!busyId || isPending}
-          className="min-w-[8rem] px-5 py-2.5 text-sm"
-          onClick={() => onSendRequest(profile.userId)}
-        >
-          {busyId === profile.userId
-            ? "Sending…"
-            : isPending
-              ? "Request sent"
-              : "Send request"}
-        </Button>
+        {isBuddy ? (
+          <span className="min-w-[8rem] rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-900">
+            Study buddies
+          </span>
+        ) : (
+          <Button
+            type="button"
+            variant={isPending || blockedByScore ? "secondary" : "primary"}
+            disabled={!!busyId || isPending || blockedByScore}
+            className="min-w-[8rem] px-5 py-2.5 text-sm"
+            title={
+              blockedByScore
+                ? `Buddy requests need at least ${minScore}% compatibility (server rule). Strengthen shared courses, topics, or overlapping availability.`
+                : undefined
+            }
+            onClick={() => onSendRequest(profile.userId)}
+          >
+            {busyId === profile.userId
+              ? "Sending…"
+              : isPending
+                ? "Request sent"
+                : blockedByScore
+                  ? `Min ${minScore}%`
+                  : "Send request"}
+          </Button>
+        )}
       </div>
+
+      {showInviteToStudy ? (
+        <Link
+          to="/sessions/new"
+          className="mt-4 flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-500/25 transition hover:from-emerald-600 hover:to-teal-600 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+        >
+          Invite to study
+        </Link>
+      ) : null}
     </Card>
   );
 }

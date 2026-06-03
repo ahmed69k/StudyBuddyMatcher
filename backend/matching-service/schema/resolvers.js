@@ -3,43 +3,98 @@ import { publishDomainEvent, publishNotification, publishBuddyRequestEvent } fro
 /** Clamps the raw heuristic sum to an integer percentage in 0–100 for display and thresholds. */
 const normalizeScore = (raw) => Math.max(0, Math.min(100, Math.round(raw)));
 
+/** Trim + lowercase for comparing labels (courses, topics, string prefs). */
+const normLabel = (s) => {
+  const t = String(s ?? "").trim().toLowerCase();
+  return t === "" ? null : t;
+};
+
+/** Collapse whitespace for comparing availability slot strings produced by Kafka (`Monday 14-17`). */
+const normAvailabilityKey = (s) => {
+  const t = String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  return t === "" ? null : t;
+};
+
 /**
- * Core matching logic: scores two `UserProfile` rows from shared courses/topics/availability and study prefs;
- * returns a capped score plus human-readable `reasons` for the UI or evaluation demo.
+ * Matching compatibility (single source of truth for `recommendMatches`, buddy-request threshold, and Kafka top-match).
+ *
+ * Uses all profile dimensions required for study-buddy matching:
+ * 1. **Courses** — intersection of course lists (weighted per shared course).
+ * 2. **Topics** — intersection of topic lists.
+ * 3. **Availability** — intersection of weekly slot strings (`UserProfile.availability`), synced from availability-service via Kafka.
+ * 4. **Study preferences** — `studyPace`, `studyMode`, `studyStyle` (equality bonuses) and `preferredGroupSize` (closer = higher partial score).
+ *
+ * Returns a 0–100 integer score and human-readable `reasons` for the UI.
  */
 const computeCompatibility = (a, b) => {
   let score = 0;
   const reasons = [];
 
-  const sharedCourses = a.courses.filter((c) => b.courses.includes(c));
+  const courseKeysSeen = new Set();
+  const sharedCourses = [];
+  for (const c of a.courses ?? []) {
+    const k = normLabel(c);
+    if (!k || courseKeysSeen.has(k)) continue;
+    courseKeysSeen.add(k);
+    if ((b.courses ?? []).some((x) => normLabel(x) === k)) {
+      sharedCourses.push(String(c).trim());
+    }
+  }
   if (sharedCourses.length > 0) {
     score += sharedCourses.length * 8;
     reasons.push(`Shared course(s): ${sharedCourses.join(", ")}`);
   }
 
-  const sharedTopics = a.topics.filter((t) => b.topics.includes(t));
+  const topicKeysSeen = new Set();
+  const sharedTopics = [];
+  for (const t of a.topics ?? []) {
+    const k = normLabel(t);
+    if (!k || topicKeysSeen.has(k)) continue;
+    topicKeysSeen.add(k);
+    if ((b.topics ?? []).some((x) => normLabel(x) === k)) {
+      sharedTopics.push(String(t).trim());
+    }
+  }
   if (sharedTopics.length > 0) {
     score += sharedTopics.length * 5;
     reasons.push(`Shared topic(s): ${sharedTopics.join(", ")}`);
   }
 
-  const sharedAvailability = a.availability.filter((u) => b.availability.includes(u));
+  const bAvailByKey = new Map();
+  for (const u of b.availability ?? []) {
+    const key = normAvailabilityKey(u);
+    if (key && !bAvailByKey.has(key)) bAvailByKey.set(key, String(u).trim());
+  }
+  const sharedAvailability = [];
+  const availKeysSeen = new Set();
+  for (const u of a.availability ?? []) {
+    const key = normAvailabilityKey(u);
+    if (!key || availKeysSeen.has(key)) continue;
+    availKeysSeen.add(key);
+    if (bAvailByKey.has(key)) sharedAvailability.push(String(u).trim());
+  }
   if (sharedAvailability.length > 0) {
     score += sharedAvailability.length * 4;
     reasons.push(`Overlapping availability: ${sharedAvailability.join(", ")}`);
   }
 
-  if (a.studyPace && b.studyPace && a.studyPace === b.studyPace) {
+  const paceA = normLabel(a.studyPace);
+  const paceB = normLabel(b.studyPace);
+  if (paceA && paceB && paceA === paceB) {
     score += 12;
     reasons.push(`Same study pace: ${a.studyPace}`);
   }
 
-  if (a.studyMode && b.studyMode && a.studyMode === b.studyMode) {
+  const modeA = normLabel(a.studyMode);
+  const modeB = normLabel(b.studyMode);
+  if (modeA && modeB && modeA === modeB) {
     score += 12;
     reasons.push(`Same study mode: ${a.studyMode}`);
   }
 
-  if (a.studyStyle && b.studyStyle && a.studyStyle === b.studyStyle) {
+  const styleA = normLabel(a.studyStyle);
+  const styleB = normLabel(b.studyStyle);
+  if (styleA && styleB && styleA === styleB) {
     score += 7;
     reasons.push(`Same study style: ${a.studyStyle}`);
   }
@@ -120,7 +175,62 @@ const mapBuddyRequest = (row) => ({
   updatedAt: toIso(row.updatedAt),
 });
 
+/** Display name from matching `UserProfile` for notifications (not raw `userId`). */
+const profileDisplayName = (profile) => {
+  if (!profile) return "Someone";
+  const n = profile.name != null ? String(profile.name).trim() : "";
+  return n || "Someone";
+};
+
+/**
+ * Batch-loads display names so list queries return complete rows in one subgraph round-trip
+ * (avoids stitched-gateway quirks with nested non-null field resolution).
+ */
+const enrichBuddyRequestsWithDisplayNames = async (prisma, rows) => {
+  const mapped = rows.map(mapBuddyRequest);
+  const ids = [...new Set(mapped.flatMap((r) => [r.requesterId, r.receiverId]))];
+  if (ids.length === 0) return mapped;
+  const profiles = await prisma.userProfile.findMany({
+    where: { userId: { in: ids } },
+    select: { userId: true, name: true },
+  });
+  const nameByUserId = new Map(profiles.map((p) => [p.userId, profileDisplayName(p)]));
+  return mapped.map((r) => ({
+    ...r,
+    requesterName: nameByUserId.get(r.requesterId) ?? "Someone",
+    receiverName: nameByUserId.get(r.receiverId) ?? "Someone",
+  }));
+};
+
 const resolvers = {
+  BuddyRequest: {
+    requesterName: async (parent, _, context) => {
+      if (typeof parent.requesterName === "string") return parent.requesterName;
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const uid = context.user.id;
+      if (parent.requesterId !== uid && parent.receiverId !== uid) {
+        throw new Error("Not authorized");
+      }
+      const profile = await prisma.userProfile.findUnique({
+        where: { userId: parent.requesterId },
+      });
+      return profileDisplayName(profile);
+    },
+    receiverName: async (parent, _, context) => {
+      if (typeof parent.receiverName === "string") return parent.receiverName;
+      const { prisma } = context;
+      assertAuthenticated(context);
+      const uid = context.user.id;
+      if (parent.requesterId !== uid && parent.receiverId !== uid) {
+        throw new Error("Not authorized");
+      }
+      const profile = await prisma.userProfile.findUnique({
+        where: { userId: parent.receiverId },
+      });
+      return profileDisplayName(profile);
+    },
+  },
   Query: {
     /** Returns one `UserProfile` row for the given id; caller must be that user. */
     userProfile: async (_, { userId }, context) => {
@@ -166,7 +276,8 @@ const resolvers = {
       if (row.requesterId !== uid && row.receiverId !== uid) {
         throw new Error("Not authorized");
       }
-      return mapBuddyRequest(row);
+      const [enriched] = await enrichBuddyRequestsWithDisplayNames(prisma, [row]);
+      return enriched;
     },
     /** Buddy requests where the current user is the receiver; optional filter by status. */
     myIncomingBuddyRequests: async (_, { status }, context) => {
@@ -178,7 +289,7 @@ const resolvers = {
         where,
         orderBy: { createdAt: "desc" },
       });
-      return rows.map(mapBuddyRequest);
+      return enrichBuddyRequestsWithDisplayNames(prisma, rows);
     },
     /** Buddy requests sent by the current user; optional filter by status. */
     myOutgoingBuddyRequests: async (_, { status }, context) => {
@@ -190,7 +301,7 @@ const resolvers = {
         where,
         orderBy: { createdAt: "desc" },
       });
-      return rows.map(mapBuddyRequest);
+      return enrichBuddyRequestsWithDisplayNames(prisma, rows);
     },
   },
   Mutation: {
@@ -266,15 +377,30 @@ const resolvers = {
         }
       }
 
-      const pendingSameDirection = await prisma.buddyRequest.findFirst({
+      const alreadyBuddies = await prisma.buddyRequest.findFirst({
         where: {
-          requesterId,
-          receiverId,
-          status: "PENDING",
+          status: "ACCEPTED",
+          OR: [
+            { requesterId, receiverId },
+            { requesterId: receiverId, receiverId: requesterId },
+          ],
         },
       });
-      if (pendingSameDirection) {
-        throw new Error("You already have a pending request to this user");
+      if (alreadyBuddies) {
+        throw new Error("You are already study buddies with this user.");
+      }
+
+      const pendingBetweenPair = await prisma.buddyRequest.findFirst({
+        where: {
+          status: "PENDING",
+          OR: [
+            { requesterId, receiverId },
+            { requesterId: receiverId, receiverId: requesterId },
+          ],
+        },
+      });
+      if (pendingBetweenPair) {
+        throw new Error("A pending buddy request already exists between you and this user.");
       }
 
       const created = await prisma.buddyRequest.create({
@@ -295,7 +421,7 @@ const resolvers = {
       await publishNotification({
         recipient: receiverId,
         subject: "New buddy request",
-        message: `User ${requesterId} sent you a study buddy request.`,
+        message: `${profileDisplayName(requesterProfile)} sent you a study buddy request.`,
       });
 
       return mapBuddyRequest(created);
@@ -325,17 +451,22 @@ const resolvers = {
         status: updated.status,
       });
 
+      const receiverProfileForNote = await prisma.userProfile.findUnique({
+        where: { userId: updated.receiverId },
+      });
+      const receiverLabel = profileDisplayName(receiverProfileForNote);
+
       if (nextStatus === "ACCEPTED") {
         await publishNotification({
           recipient: updated.requesterId,
           subject: "Buddy request accepted",
-          message: `User ${updated.receiverId} accepted your study buddy request.`,
+          message: `${receiverLabel} accepted your study buddy request.`,
         });
       } else {
         await publishNotification({
           recipient: updated.requesterId,
           subject: "Buddy request declined",
-          message: `User ${updated.receiverId} declined your study buddy request.`,
+          message: `${receiverLabel} declined your study buddy request.`,
         });
       }
 
@@ -363,10 +494,14 @@ const resolvers = {
         status: updated.status,
       });
 
+      const requesterProfileForNote = await prisma.userProfile.findUnique({
+        where: { userId: updated.requesterId },
+      });
+
       await publishNotification({
         recipient: updated.receiverId,
         subject: "Buddy request withdrawn",
-        message: `User ${updated.requesterId} cancelled their study buddy request.`,
+        message: `${profileDisplayName(requesterProfileForNote)} cancelled their study buddy request.`,
       });
 
       return mapBuddyRequest(updated);

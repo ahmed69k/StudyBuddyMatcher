@@ -50,7 +50,7 @@ const resolvers ={
             const secret = process.env.SECRET_KEY?.trim();
             if (!secret) throw new Error("Server configuration error.");
             const token = jwt.sign(
-                { id: user.id, email: user.email },
+                { id: user.id, email: user.email, username: user.username },
                 secret,
                 { expiresIn: "1h" }
             );

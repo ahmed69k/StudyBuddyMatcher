@@ -6,14 +6,17 @@ import {
   RESPOND_TO_BUDDY_REQUEST,
   CANCEL_BUDDY_REQUEST,
 } from "../../graphql/matching";
+import { GET_ALL_USERS_LABELS } from "../../graphql/auth";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import Card from "../ui/Card";
 import SegmentedTabs from "../ui/SegmentedTabs";
 
+/** Fallback when a user id is not in `getAllUsers` (uses same shape as legacy short-id display). */
 function shortId(id) {
-  if (!id) return "";
-  return id.length > 10 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
+  if (id == null || id === "") return "";
+  const s = String(id);
+  return s.length > 10 ? `${s.slice(0, 6)}…${s.slice(-4)}` : s;
 }
 
 function statusTone(status) {
@@ -34,14 +37,33 @@ function statusTone(status) {
 export default function BuddyRequestsPanel() {
   const [tab, setTab] = useState("incoming");
 
-  const { data: incData, loading: incLoading } = useQuery(
+  const { data: incData, loading: incLoading, error: incError } = useQuery(
     MY_INCOMING_BUDDY_REQUESTS,
     { fetchPolicy: "cache-and-network" },
   );
-  const { data: outData, loading: outLoading } = useQuery(
+  const { data: outData, loading: outLoading, error: outError } = useQuery(
     MY_OUTGOING_BUDDY_REQUESTS,
     { fetchPolicy: "cache-and-network" },
   );
+
+  const { data: labelsData } = useQuery(GET_ALL_USERS_LABELS, {
+    fetchPolicy: "cache-first",
+  });
+
+  const usernameById = useMemo(() => {
+    const m = new Map();
+    for (const u of labelsData?.getAllUsers ?? []) {
+      if (u?.id != null) m.set(String(u.id), u.username || "");
+    }
+    return m;
+  }, [labelsData?.getAllUsers]);
+
+  const displayName = (userId) => {
+    const key = userId != null ? String(userId) : "";
+    const name = usernameById.get(key);
+    if (name && String(name).trim()) return String(name).trim();
+    return shortId(userId);
+  };
 
   const [respond, { loading: responding }] = useMutation(
     RESPOND_TO_BUDDY_REQUEST,
@@ -104,6 +126,7 @@ export default function BuddyRequestsPanel() {
   }, [tab, incoming, outgoing]);
 
   const loading = incLoading || outLoading;
+  const queryError = incError || outError;
 
   return (
     <div className="space-y-6">
@@ -118,7 +141,17 @@ export default function BuddyRequestsPanel() {
       </div>
 
       <Card className="p-0 overflow-hidden">
-        {loading ? (
+        {queryError ? (
+          <div className="p-12 text-center">
+            <p className="font-medium text-rose-800">Could not load buddy requests</p>
+            <p className="mt-1 text-sm text-rose-700/90">{queryError.message}</p>
+            <p className="mt-3 text-xs text-slate-500">
+              Check the browser Network tab for the GraphQL response, or restart{" "}
+              <span className="font-medium text-slate-600">graphql-gateway</span> after updating
+              subgraphs so the gateway schema matches the services.
+            </p>
+          </div>
+        ) : loading ? (
           <div className="p-12 text-center text-slate-500">Loading requests…</div>
         ) : visibleRows.length === 0 ? (
           <div className="p-12 text-center">
@@ -145,8 +178,8 @@ export default function BuddyRequestsPanel() {
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900">
                       {row.role === "incoming"
-                        ? `From ${shortId(row.requesterId)}`
-                        : `To ${shortId(row.receiverId)}`}
+                        ? `From ${displayName(row.requesterId)}`
+                        : `To ${displayName(row.receiverId)}`}
                     </p>
                     {row.message ? (
                       <p className="mt-0.5 text-sm text-slate-600">

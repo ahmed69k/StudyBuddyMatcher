@@ -1,78 +1,136 @@
-import { gql } from "@apollo/client";
-import { useQuery } from "@apollo/client/react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import DashboardPage from "../pages/DashboardPage";
+import LinkButton from "./ui/LinkButton";
 
-const BACKEND_CHECK = gql`
-  query BackendCheck {
-    __typename
-  }
-`;
+function FeatureCard({ icon, title, description }) {
+  return (
+    <div
+      className="rounded-3xl border border-violet-100/80 bg-white/70 p-6 shadow-[var(--shadow-card)] backdrop-blur-sm transition hover:border-violet-200/90 hover:shadow-lg"
+    >
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-teal-50 text-2xl">
+        {icon}
+      </div>
+      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-slate-600">{description}</p>
+    </div>
+  );
+}
 
 export default function Home() {
-  const { loading, error, data } = useQuery(BACKEND_CHECK);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setLoggedIn(!!localStorage.getItem("token"));
+    const onStorage = () => setLoggedIn(!!localStorage.getItem("token"));
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  if (loggedIn) {
+    return <DashboardPage />;
+  }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-6xl items-center px-6 py-12">
-      <section className="grid w-full items-center gap-8 rounded-3xl border border-white/70 bg-white/80 p-8 shadow-card backdrop-blur md:grid-cols-[1.35fr_0.65fr] md:p-12">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-700">
-            StudyBuddyMatcher
-          </p>
-          <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight text-surface-900 md:text-6xl">
-            Find study partners who match your courses, schedule, and study style.
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-            This is the frontend foundation on the malak branch. Next we will
-            replace screens with your Figma UI and connect each workflow to the
-            GraphQL gateway.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/register"
-              className="rounded-full bg-brand-600 px-6 py-3 font-bold text-white shadow-soft transition hover:bg-brand-700"
-            >
-              Create account
-            </Link>
-            <Link
-              to="/login"
-              className="rounded-full border border-brand-200 bg-white px-6 py-3 font-bold text-brand-700 transition hover:border-brand-400"
-            >
-              Log in
-            </Link>
-          </div>
-        </div>
+    <main className="relative overflow-hidden px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgb(196_181_253_/_0.35),transparent)]"
+      />
 
-        <aside className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card">
-          <p className="text-sm font-bold uppercase tracking-[0.14em] text-slate-500">
-            Backend gateway
-          </p>
-          {loading && (
-            <p className="mt-3 text-xl font-black text-slate-900">
-              Checking connection...
-            </p>
-          )}
-          {error && (
-            <>
-              <p className="mt-3 text-xl font-black text-red-600">
-                Not connected
+      <div className="mx-auto max-w-6xl">
+        <section className="rounded-[2rem] border border-violet-100/60 bg-white/40 p-8 shadow-[var(--shadow-soft)] backdrop-blur-md sm:p-12 lg:p-14">
+          <div className="grid items-center gap-10 lg:grid-cols-[1fr_minmax(0,1.05fr)] lg:gap-12">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-violet-600">
+                Study Buddy Matcher
               </p>
-              <p className="mt-2 break-words text-sm text-slate-500">
-                {error.message}
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl lg:text-[2.5rem] lg:leading-tight">
+                Find your perfect{" "}
+                <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-teal-500 bg-clip-text text-transparent">
+                  study buddy
+                </span>
+              </h1>
+              <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
+                Match with students who share your courses, study style, and
+                availability—then plan sessions that actually fit your week.
               </p>
-            </>
-          )}
-          {data && (
-            <>
-              <p className="mt-3 text-xl font-black text-emerald-600">
-                Connected
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                GraphQL endpoint: http://localhost:4001/
-              </p>
-            </>
-          )}
-        </aside>
-      </section>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                {loggedIn ? (
+                  <>
+                    <LinkButton to="/matches" className="min-w-[10.5rem] px-6 py-3">
+                      Go to matches
+                    </LinkButton>
+                    <LinkButton
+                      to="/sessions"
+                      variant="secondary"
+                      className="min-w-[10.5rem] px-6 py-3"
+                    >
+                      Study sessions
+                    </LinkButton>
+                  </>
+                ) : (
+                  <>
+                    <LinkButton to="/register" className="min-w-[10.5rem] px-6 py-3">
+                      Get started
+                    </LinkButton>
+                    <LinkButton
+                      to="/login"
+                      variant="secondary"
+                      className="min-w-[10.5rem] px-6 py-3"
+                    >
+                      Log in
+                    </LinkButton>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="relative mx-auto w-full max-w-md lg:max-w-none">
+              <div className="aspect-[4/3] overflow-hidden rounded-3xl border border-violet-100/80 bg-gradient-to-br from-violet-100/90 via-white to-teal-50 shadow-[var(--shadow-card)]">
+                <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+                  <div className="flex -space-x-3">
+                    {[ "from-violet-500", "from-purple-500", "from-teal-400" ].map(
+                      (g, i) => (
+                        <div
+                          key={i}
+                          className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${g} to-violet-700 text-lg font-bold text-white shadow-lg ring-4 ring-white`}
+                        >
+                          {["A", "B", "C"][i]}
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <p className="mt-6 text-sm font-semibold text-violet-900">
+                    Learn together, stay on track
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Collaborative study, without the awkward group chat noise.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <FeatureCard
+            icon="📅"
+            title="Plan study sessions"
+            description="Organize study time with your buddies around real availability—not last-minute chaos."
+          />
+          <FeatureCard
+            icon="🤝"
+            title="Find study buddies"
+            description="Connect with students in your courses who want the same pace and goals."
+          />
+          <FeatureCard
+            icon="✨"
+            title="Smart matching"
+            description="Find partners based on preferences so your sessions feel productive, not random."
+          />
+        </section>
+      </div>
     </main>
   );
 }
